@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seewopan/shared/pinco_api_client.dart';
 
@@ -12,6 +16,83 @@ void main() {
       url,
       'https://pinco.seewo.com/server-main/api/v1/drive/materials/download'
       '?resId=id+with+space%2F%26%3F',
+    );
+  });
+
+  test('renameMaterial should call rename action and clear cache', () async {
+    var listCallCount = 0;
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        listCallCount += 1;
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': 'old-name.txt',
+                  'type': 'resource',
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'PutV1DriveMaterialsByMaterialIdName') {
+        expect(request.method, 'POST');
+        expect(request.headers['cookie'], 'token=abc');
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(payload['materialId'], 'm1');
+        expect(payload['name'], 'new-name.txt');
+
+        return http.Response(
+          jsonEncode({'statusCode': 0, 'data': true, 'message': 'ok'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+    await client.getMaterials(cookie: 'token=abc', folderId: '0');
+    expect(listCallCount, 1);
+
+    await client.renameMaterial(
+      cookie: 'token=abc',
+      materialId: 'm1',
+      name: 'new-name.txt',
+    );
+
+    await client.getMaterials(cookie: 'token=abc', folderId: '0');
+    expect(listCallCount, 2);
+  });
+
+  test('renameMaterial should throw when backend returns false', () async {
+    final mockClient = MockClient((request) async {
+      return http.Response(
+        jsonEncode({'statusCode': 0, 'data': false, 'message': 'ok'}),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+
+    await expectLater(
+      client.renameMaterial(
+        cookie: 'token=abc',
+        materialId: 'm1',
+        name: 'new-name.txt',
+      ),
+      throwsA(isA<FormatException>()),
     );
   });
 }

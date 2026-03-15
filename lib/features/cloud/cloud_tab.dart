@@ -154,6 +154,8 @@ class _CloudTabState extends State<CloudTab> {
                   behavior: HitTestBehavior.opaque,
                   onSecondaryTapDown: (details) =>
                       _showItemContextMenu(details.globalPosition, item),
+                  onLongPressStart: (details) =>
+                      _showItemContextMenu(details.globalPosition, item),
                   child: ListTile(
                     leading: item.isFolder
                         ? const Icon(Icons.folder_outlined)
@@ -305,6 +307,10 @@ class _CloudTabState extends State<CloudTab> {
       ),
       items: [
         const PopupMenuItem(
+          value: _ItemMenuAction.rename,
+          child: Text('重命名'),
+        ),
+        const PopupMenuItem(
           value: _ItemMenuAction.copyName,
           child: Text('复制文件名'),
         ),
@@ -321,6 +327,9 @@ class _CloudTabState extends State<CloudTab> {
     }
 
     switch (selected) {
+      case _ItemMenuAction.rename:
+        await _renameItem(item);
+        break;
       case _ItemMenuAction.copyName:
         await _copyText(item.name, '已复制文件名');
         break;
@@ -360,6 +369,80 @@ class _CloudTabState extends State<CloudTab> {
     );
   }
 
+  Future<void> _renameItem(DriveMaterial item) async {
+    final renamed = await _showRenameDialog(item.name);
+    if (renamed == null || !mounted) {
+      return;
+    }
+
+    final currentName = item.name.trim();
+    final newName = renamed.trim();
+    if (newName == currentName) {
+      return;
+    }
+
+    try {
+      await widget.apiClient.renameMaterial(
+        cookie: widget.cookie,
+        materialId: item.id,
+        name: newName,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('重命名成功。')),
+      );
+      await _loadMaterials(forceRefresh: true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('重命名失败：$error')),
+      );
+    }
+  }
+
+  Future<String?> _showRenameDialog(String initialName) async {
+    final controller = TextEditingController(text: initialName);
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('重命名'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '新名称',
+                hintText: '请输入新名称',
+              ),
+              onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(context).pop(controller.text.trim()),
+                child: const Text('确定'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';
@@ -379,6 +462,7 @@ class _CloudTabState extends State<CloudTab> {
 }
 
 enum _ItemMenuAction {
+  rename,
   copyName,
   copyDownloadUrl,
 }

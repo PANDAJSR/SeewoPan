@@ -103,6 +103,45 @@ class PincoApiClient {
         '?resId=${Uri.encodeQueryComponent(materialId)}';
   }
 
+  Future<void> renameMaterial({
+    required String cookie,
+    required String materialId,
+    required String name,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialId = materialId.trim();
+    final normalizedName = name.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialId.isEmpty) {
+      throw ArgumentError.value(
+        materialId,
+        'materialId',
+        'Material ID cannot be empty.',
+      );
+    }
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Name cannot be empty.');
+    }
+
+    final data = await _postAction(
+      actionName: 'PutV1DriveMaterialsByMaterialIdName',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'materialId': normalizedMaterialId,
+        'name': normalizedName,
+      },
+    );
+
+    if (data == false) {
+      throw const FormatException('Rename request failed.');
+    }
+
+    _materialsCache.clear();
+  }
+
   Future<dynamic> _postAction({
     required String actionName,
     required String cookie,
