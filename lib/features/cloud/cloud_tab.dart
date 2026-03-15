@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_icon/file_icon.dart';
 
 import '../../shared/models/drive_material.dart';
 import '../../shared/pinco_api_client.dart';
@@ -149,11 +150,9 @@ class _CloudTabState extends State<CloudTab> {
               (item) => Card(
                 clipBehavior: Clip.antiAlias,
                 child: ListTile(
-                  leading: Icon(
-                    item.isFolder
-                        ? Icons.folder_outlined
-                        : Icons.insert_drive_file_outlined,
-                  ),
+                  leading: item.isFolder
+                      ? const Icon(Icons.folder_outlined)
+                      : FileIcon(item.name, size: 24),
                   title: Text(item.name),
                   subtitle: Text(_buildSubtitle(item)),
                   trailing: item.isFolder
@@ -173,9 +172,6 @@ class _CloudTabState extends State<CloudTab> {
     final parts = <String>[];
     if (!item.isFolder) {
       parts.add(_formatBytes(item.size));
-    }
-    if (item.mimeType.isNotEmpty && item.mimeType != '-') {
-      parts.add(item.mimeType);
     }
     if (item.updatedAt?.isNotEmpty == true) {
       parts.add('更新于 ${item.updatedAt}');
