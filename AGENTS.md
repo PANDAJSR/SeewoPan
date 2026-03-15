@@ -24,6 +24,8 @@
 
 ## 提交规范
 
+- 每次完成代码或文档变更后，必须自动执行一次 `git commit`。
+- 每次 `git commit` 后，必须自动执行一次 `git push`（默认推送到当前分支的上游）。
 - 提交信息建议使用 Conventional Commits，例如：
   - `feat: add login screen skeleton`
   - `fix: handle empty file list state`
