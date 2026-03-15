@@ -35,6 +35,7 @@ class _ProfileTabState extends State<ProfileTab> {
   void initState() {
     super.initState();
     _syncCookieFromProps();
+    _maybeAutoFetchUserInfo();
   }
 
   @override
@@ -43,6 +44,7 @@ class _ProfileTabState extends State<ProfileTab> {
     if (oldWidget.initialCookie != widget.initialCookie) {
       _syncCookieFromProps();
       _resetProfile();
+      _maybeAutoFetchUserInfo();
     }
   }
 
@@ -69,6 +71,8 @@ class _ProfileTabState extends State<ProfileTab> {
       _error = null;
       _resetProfile();
     });
+
+    _maybeAutoFetchUserInfo();
   }
 
   Future<void> _fetchUserInfo() async {
@@ -113,6 +117,23 @@ class _ProfileTabState extends State<ProfileTab> {
     _profile = null;
   }
 
+  void _maybeAutoFetchUserInfo() {
+    if (_isLoadingUserInfo) {
+      return;
+    }
+
+    if (_cookieController.text.trim().isEmpty) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isLoadingUserInfo || _profile != null) {
+        return;
+      }
+      _fetchUserInfo();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.isLoadingCookie) {
@@ -131,7 +152,7 @@ class _ProfileTabState extends State<ProfileTab> {
             if (_profile == null)
               Text(
                 hasCookie
-                    ? '已检测到 Cookie，点击下方按钮获取用户资料。'
+                    ? '已检测到 Cookie，将自动获取用户资料，也可手动刷新。'
                     : '当前未设置 Cookie，请先填写并保存。',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
