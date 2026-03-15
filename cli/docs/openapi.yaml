@@ -1,0 +1,329 @@
+openapi: 3.0.3
+info:
+  title: Seewo Pinco Drive OpenAPI (Reverse Engineered)
+  version: 1.0.0
+  description: |
+    OpenAPI description for the captured upload/list/capacity APIs.
+    Note: all `/teacher/api.json` calls are multiplexed by `actionName` query parameter.
+servers:
+  - url: https://pinco.seewo.com
+    description: Pinco business API
+  - url: https://cstore-private.oss-cn-hangzhou.aliyuncs.com
+    description: OSS direct upload host
+security:
+  - cookieAuth: []
+paths:
+  /teacher/api.json:
+    post:
+      summary: Teacher API action endpoint
+      description: |
+        Unified endpoint for drive-related operations.
+        Choose action by query parameter `actionName`.
+      operationId: postTeacherApiAction
+      parameters:
+        - name: actionName
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - PostV1DriveMaterialsMatch
+              - PostV3CstoreUploadPolicy
+              - PostV1DriveMaterialsCstoreWay
+              - GetV1DriveMaterials
+              - GetV1DriveMaterialsCapacity
+              - DeleteV1DriveMaterials
+              - PostV1DriveMaterialsFolders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DriveMaterialsMatchRequest'
+                - $ref: '#/components/schemas/CstoreUploadPolicyRequest'
+                - $ref: '#/components/schemas/DriveMaterialsCstoreWayRequest'
+                - $ref: '#/components/schemas/GetDriveMaterialsRequest'
+                - $ref: '#/components/schemas/GetDriveMaterialsCapacityRequest'
+                - $ref: '#/components/schemas/DeleteDriveMaterialsRequest'
+                - $ref: '#/components/schemas/CreateFolderRequest'
+            examples:
+              match:
+                summary: PostV1DriveMaterialsMatch
+                value:
+                  fileMd5: 44d9f02273f3766086d4336640b6c585
+                  fileSize: 2669
+                  fileName: daily-quote.txt
+                  mimeType: text/plain
+              policy:
+                summary: PostV3CstoreUploadPolicy
+                value:
+                  keySuffix: txt
+              commit:
+                summary: PostV1DriveMaterialsCstoreWay
+                value:
+                  fileSize: 2669
+                  downloadUrl: https://cstore-pri-pinco-bs.seewo.com/seewo-pinco-private/example.txt
+                  fileKey: seewo-pinco-private/example.txt
+                  fileMd5: 44d9f02273f3766086d4336640b6c585
+                  name: daily-quote.txt
+                  parentFolderId: '0'
+                  size: 2669
+                  mimeType: text/plain
+              list:
+                summary: GetV1DriveMaterials
+                value:
+                  keyword: ''
+                  size: 50
+                  tagName: resource
+                  page: 0
+                  folderId: '0'
+              capacity:
+                summary: GetV1DriveMaterialsCapacity
+                value:
+                  type: 1
+              delete:
+                summary: DeleteV1DriveMaterials
+                value:
+                  resIds:
+                    - 770339e1238a4cbb8c558fb8d2d319ac
+              mkdir:
+                summary: PostV1DriveMaterialsFolders
+                value:
+                  name: aaa
+                  parentFolderId: '0'
+      responses:
+        '200':
+          description: Success envelope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+              examples:
+                generic:
+                  value:
+                    code: 0
+                    msg: ok
+                    data: {}
+
+  /:
+    post:
+      summary: Upload file directly to OSS
+      description: |
+        Multipart upload using fields returned by `PostV3CstoreUploadPolicy`.
+      operationId: uploadToOss
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OssUploadRequest'
+      responses:
+        '200':
+          description: Upload success (status may also be 204 depending on policy)
+          content:
+            text/plain:
+              schema:
+                type: string
+        '204':
+          description: Upload success without body
+
+    options:
+      summary: CORS preflight
+      operationId: ossPreflight
+      responses:
+        '200':
+          description: Preflight allowed
+
+  /server-main/api/v1/drive/materials/download:
+    get:
+      summary: Resolve material download URL
+      description: |
+        Exchange `resId` for downloadable content.
+        Usually responds with HTTP 302 redirect to a temporary signed OSS URL.
+      operationId: getDriveMaterialDownload
+      parameters:
+        - name: resId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to signed OSS URL
+        '200':
+          description: File content or proxy stream
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: x-token
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 0
+        msg:
+          type: string
+          example: ok
+        data:
+          type: object
+          additionalProperties: true
+      additionalProperties: true
+
+    DriveMaterialsMatchRequest:
+      type: object
+      required:
+        - fileMd5
+        - fileSize
+        - fileName
+        - mimeType
+      properties:
+        fileMd5:
+          type: string
+          description: Local file MD5 (32 lowercase hex chars)
+        fileSize:
+          type: integer
+          format: int64
+        fileName:
+          type: string
+        mimeType:
+          type: string
+
+    CstoreUploadPolicyRequest:
+      type: object
+      required:
+        - keySuffix
+      properties:
+        keySuffix:
+          type: string
+          description: File extension without dot, for example txt/pdf/docx
+
+    DriveMaterialsCstoreWayRequest:
+      type: object
+      required:
+        - fileSize
+        - downloadUrl
+        - fileKey
+        - fileMd5
+        - name
+        - parentFolderId
+        - size
+        - mimeType
+      properties:
+        fileSize:
+          type: integer
+          format: int64
+        downloadUrl:
+          type: string
+          format: uri
+        fileKey:
+          type: string
+          description: OSS object key (example: seewo-pinco-private/xxx.txt)
+        fileMd5:
+          type: string
+        name:
+          type: string
+        parentFolderId:
+          type: string
+        size:
+          type: integer
+          format: int64
+        mimeType:
+          type: string
+
+    GetDriveMaterialsRequest:
+      type: object
+      required:
+        - keyword
+        - size
+        - tagName
+        - page
+        - folderId
+      properties:
+        keyword:
+          type: string
+        size:
+          type: integer
+        tagName:
+          type: string
+          example: resource
+        page:
+          type: integer
+          minimum: 0
+        folderId:
+          type: string
+
+    GetDriveMaterialsCapacityRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: integer
+          example: 1
+
+    DeleteDriveMaterialsRequest:
+      type: object
+      required:
+        - resIds
+      properties:
+        resIds:
+          type: array
+          items:
+            type: string
+
+    CreateFolderRequest:
+      type: object
+      required:
+        - name
+        - parentFolderId
+      properties:
+        name:
+          type: string
+        parentFolderId:
+          type: string
+
+    OssUploadRequest:
+      type: object
+      required:
+        - OSSAccessKeyId
+        - policy
+        - Signature
+        - key
+        - callback
+        - success_action_status
+        - file
+      properties:
+        OSSAccessKeyId:
+          type: string
+        policy:
+          type: string
+          description: Base64 policy document
+        Signature:
+          type: string
+        key:
+          type: string
+        callback:
+          type: string
+          description: Base64 callback config
+        success_action_status:
+          type: string
+          example: '200'
+        x:appid:
+          type: string
+        x:sessionid:
+          type: string
+        x:bucketid:
+          type: string
+        x-oss-forbid-overwrite:
+          type: string
+          example: 'false'
+        file:
+          type: string
+          format: binary

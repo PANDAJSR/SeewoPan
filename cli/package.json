@@ -1,0 +1,19 @@
+{
+  "name": "seewo-cli",
+  "version": "0.1.0",
+  "description": "CLI for pinco.seewo.com drive upload/list operations",
+  "type": "module",
+  "bin": {
+    "seewo": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "upload": "node src/cli.js upload",
+    "list": "node src/cli.js list",
+    "capacity": "node src/cli.js capacity"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
