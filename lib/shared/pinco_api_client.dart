@@ -17,13 +17,18 @@ class UploadProgress {
     required this.sentBytes,
     required this.totalBytes,
     required this.elapsed,
+    this.estimatedProgress,
   });
 
   final int sentBytes;
   final int totalBytes;
   final Duration elapsed;
+  final double? estimatedProgress;
 
   double get progress {
+    if (estimatedProgress != null) {
+      return estimatedProgress!.clamp(0.0, 1.0);
+    }
     if (totalBytes <= 0) {
       return 0;
     }
@@ -310,7 +315,7 @@ class PincoApiClient {
     String? mimeType,
     UploadProgressCallback? onProgress,
   }) async {
-    final totalStart = DateTime.now();
+    final totalWatch = Stopwatch()..start();
     final normalizedCookie = cookie.trim();
     final normalizedName = fileName.trim();
     final normalizedParentFolderId = parentFolderId.trim();
@@ -340,6 +345,34 @@ class PincoApiClient {
     final digest = md5.convert(bytes);
     final fileMd5 = digest.toString();
     final fileSize = bytes.lengthInBytes;
+    var stagedProgress = 0.0;
+
+    void reportProgress({
+      required double progress,
+      int? sentBytes,
+      Duration? elapsed,
+    }) {
+      if (onProgress == null) {
+        return;
+      }
+      final clampedProgress = progress.clamp(0.0, 1.0).toDouble();
+      if (clampedProgress < stagedProgress) {
+        return;
+      }
+      stagedProgress = clampedProgress;
+      final estimatedSentBytes =
+          sentBytes ?? (fileSize * clampedProgress).round().clamp(0, fileSize);
+      onProgress(
+        UploadProgress(
+          sentBytes: estimatedSentBytes,
+          totalBytes: fileSize,
+          elapsed: elapsed ?? totalWatch.elapsed,
+          estimatedProgress: clampedProgress,
+        ),
+      );
+    }
+
+    reportProgress(progress: 0.08);
 
     final matchResponse = await _postAction(
       actionName: 'PostV1DriveMaterialsMatch',
@@ -364,10 +397,11 @@ class PincoApiClient {
         matchedUrl != null &&
         matchedKey != null &&
         matchedKey.isNotEmpty) {
-      final totalElapsed = DateTime.now().difference(totalStart);
+      reportProgress(progress: 1);
+      totalWatch.stop();
       final metrics = _buildUploadMetrics(
         fileSizeBytes: fileSize,
-        totalElapsed: totalElapsed,
+        totalElapsed: totalWatch.elapsed,
         uploadElapsed: Duration.zero,
       );
       return UploadFileResult(
@@ -384,6 +418,8 @@ class PincoApiClient {
         metrics: metrics,
       );
     }
+
+    reportProgress(progress: 0.18);
 
     final suffix = _extWithoutDot(normalizedName).isEmpty
         ? 'bin'
@@ -416,6 +452,8 @@ class PincoApiClient {
       );
     }
 
+    reportProgress(progress: 0.28);
+
     final uploadWatch = Stopwatch()..start();
     await _uploadToOss(
       host: policy.host,
@@ -427,16 +465,23 @@ class PincoApiClient {
       onProgress: onProgress == null
           ? null
           : (sent, total) {
+              final normalizedTotal = total <= 0 ? fileSize : total;
+              final uploadProgress = normalizedTotal <= 0
+                  ? 0.0
+                  : (sent / normalizedTotal).clamp(0.0, 1.0).toDouble();
+              final staged = 0.28 + uploadProgress * 0.67;
               onProgress(
                 UploadProgress(
                   sentBytes: sent,
-                  totalBytes: total <= 0 ? fileSize : total,
+                  totalBytes: normalizedTotal,
                   elapsed: uploadWatch.elapsed,
+                  estimatedProgress: staged,
                 ),
               );
             },
     );
     uploadWatch.stop();
+    reportProgress(progress: 0.95, elapsed: uploadWatch.elapsed);
 
     final commitPayload = <String, dynamic>{
       'fileSize': fileSize,
@@ -468,10 +513,11 @@ class PincoApiClient {
 
     _materialsCache.clear();
 
-    final totalElapsed = DateTime.now().difference(totalStart);
+    totalWatch.stop();
+    reportProgress(progress: 1);
     final metrics = _buildUploadMetrics(
       fileSizeBytes: fileSize,
-      totalElapsed: totalElapsed,
+      totalElapsed: totalWatch.elapsed,
       uploadElapsed: uploadWatch.elapsed,
     );
 

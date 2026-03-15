@@ -187,7 +187,7 @@ class UploadTaskManager extends ChangeNotifier {
               }
               _tasks[index] = _tasks[index].copyWith(
                 status: UploadTaskStatus.uploading,
-                progress: progress.progress.clamp(0, 1),
+                progress: progress.progress.clamp(0.0, 0.99),
                 speedBps: progress.speedBps,
                 uploadedBytes: progress.sentBytes,
                 totalBytes: progress.totalBytes,
