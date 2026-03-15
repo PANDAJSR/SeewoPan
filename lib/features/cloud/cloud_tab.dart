@@ -392,10 +392,13 @@ class _CloudTabState extends State<CloudTab> {
         return;
       }
 
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('重命名成功。')),
       );
-      await _loadMaterials(forceRefresh: true);
     } catch (error) {
       if (!mounted) {
         return;
@@ -408,39 +411,36 @@ class _CloudTabState extends State<CloudTab> {
   }
 
   Future<String?> _showRenameDialog(String initialName) async {
-    final controller = TextEditingController(text: initialName);
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('重命名'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '新名称',
-                hintText: '请输入新名称',
-              ),
-              onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
+    var renamed = initialName;
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('重命名'),
+          content: TextFormField(
+            initialValue: initialName,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '新名称',
+              hintText: '请输入新名称',
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(controller.text.trim()),
-                child: const Text('确定'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
+            onChanged: (value) => renamed = value,
+            onFieldSubmitted: (value) =>
+                Navigator.of(dialogContext).pop(value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(renamed.trim()),
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   String _formatBytes(int bytes) {
