@@ -174,9 +174,59 @@ class _CloudTabState extends State<CloudTab> {
       parts.add(_formatBytes(item.size));
     }
     if (item.updatedAt?.isNotEmpty == true) {
-      parts.add('更新于 ${item.updatedAt}');
+      parts.add('更新于 ${_formatUpdatedAt(item.updatedAt!)}');
     }
     return parts.join(' · ');
+  }
+
+  String _formatUpdatedAt(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) {
+      return raw;
+    }
+
+    final parsed = _parseDateTime(normalized);
+    if (parsed == null) {
+      return raw;
+    }
+
+    final local = parsed.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute';
+  }
+
+  DateTime? _parseDateTime(String value) {
+    final direct = DateTime.tryParse(value);
+    if (direct != null) {
+      return direct;
+    }
+
+    final timestamp = int.tryParse(value);
+    if (timestamp == null) {
+      return null;
+    }
+
+    final length = value.startsWith('-') ? value.length - 1 : value.length;
+    if (length <= 10) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    }
+    if (length == 12) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp * 10);
+    }
+    if (length == 13) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    }
+    if (length == 16) {
+      return DateTime.fromMicrosecondsSinceEpoch(timestamp);
+    }
+    if (length == 19) {
+      return DateTime.fromMicrosecondsSinceEpoch(timestamp ~/ 1000);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
   }
 
   String get _currentFolderId =>
