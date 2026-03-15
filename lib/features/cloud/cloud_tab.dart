@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:file_icon/file_icon.dart';
 
+import '../transfer/upload_task_manager.dart';
 import '../../shared/models/drive_material.dart';
 import '../../shared/pinco_api_client.dart';
 
@@ -11,11 +13,15 @@ class CloudTab extends StatefulWidget {
     required this.cookie,
     required this.isLoadingCookie,
     required this.apiClient,
+    required this.onUploadFiles,
+    required this.onOpenTransferTab,
   });
 
   final String cookie;
   final bool isLoadingCookie;
   final PincoApiClient apiClient;
+  final Future<void> Function(List<UploadSourceFile> files) onUploadFiles;
+  final VoidCallback onOpenTransferTab;
 
   @override
   State<CloudTab> createState() => _CloudTabState();
@@ -114,6 +120,11 @@ class _CloudTabState extends State<CloudTab> {
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const Spacer(),
+                IconButton(
+                  onPressed: _isLoading ? null : _pickAndUploadFiles,
+                  icon: const Icon(Icons.file_upload_outlined),
+                  tooltip: '上传文件',
+                ),
                 IconButton(
                   onPressed: _isLoading ? null : _createFolder,
                   icon: const Icon(Icons.create_new_folder_outlined),
@@ -299,6 +310,44 @@ class _CloudTabState extends State<CloudTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('文件预览功能开发中。')),
     );
+  }
+
+  Future<void> _pickAndUploadFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final files = result.files
+        .where((file) => file.bytes != null && file.bytes!.isNotEmpty)
+        .map(
+          (file) => UploadSourceFile(
+            name: file.name,
+            bytes: file.bytes!,
+            parentFolderId: _currentFolderId,
+          ),
+        )
+        .toList(growable: false);
+
+    if (files.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未读取到文件内容，请重试。')),
+      );
+      return;
+    }
+
+    await widget.onUploadFiles(files);
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已添加 ${files.length} 个上传任务。')),
+    );
+    widget.onOpenTransferTab();
   }
 
   Future<void> _showItemContextMenu(Offset position, DriveMaterial item) async {

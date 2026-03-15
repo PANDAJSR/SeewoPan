@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/cloud/cloud_tab.dart';
 import '../features/profile/profile_tab.dart';
+import '../features/transfer/transfer_tab.dart';
+import '../features/transfer/upload_task_manager.dart';
 import '../shared/pinco_api_client.dart';
 
 class HomeShellPage extends StatefulWidget {
@@ -27,6 +29,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
   ];
 
   final PincoApiClient _apiClient = PincoApiClient();
+  late final UploadTaskManager _uploadTaskManager =
+      UploadTaskManager(apiClient: _apiClient);
 
   int _selectedIndex = 0;
   bool _isLoadingCookie = true;
@@ -37,6 +41,12 @@ class _HomeShellPageState extends State<HomeShellPage> {
   void initState() {
     super.initState();
     _loadCookie();
+  }
+
+  @override
+  void dispose() {
+    _uploadTaskManager.dispose();
+    super.dispose();
   }
 
   @override
@@ -100,9 +110,11 @@ class _HomeShellPageState extends State<HomeShellPage> {
           cookie: _cookie,
           isLoadingCookie: _isLoadingCookie,
           apiClient: _apiClient,
+          onUploadFiles: _uploadTaskManager.enqueueFiles,
+          onOpenTransferTab: () => _onSelect(1),
         );
       case 1:
-        return const _PlaceholderPage(title: '传输');
+        return TransferTab(taskManager: _uploadTaskManager);
       case 2:
         return ProfileTab(
           initialCookie: _cookie,
@@ -128,6 +140,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       _cookie = cookie;
       _isLoadingCookie = false;
     });
+    _uploadTaskManager.updateCookie(cookie);
   }
 
   Future<void> _saveCookie(String value) async {
@@ -146,6 +159,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       _cookie = value;
       _isSavingCookie = false;
     });
+    _uploadTaskManager.updateCookie(value);
   }
 }
 
@@ -159,20 +173,4 @@ class _NavItem {
   final String label;
   final IconData icon;
   final IconData selectedIcon;
-}
-
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '$title 页面开发中',
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-    );
-  }
 }
