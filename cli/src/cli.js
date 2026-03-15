@@ -10,7 +10,7 @@ const DEFAULT_OSS_HOST = 'https://cstore-private.oss-cn-hangzhou.aliyuncs.com/';
 const DEFAULT_DOWNLOAD_BASE = 'https://cstore-pri-pinco-bs.seewo.com/';
 
 function printHelp() {
-  const text = `seewo CLI\n\nUsage:\n  seewo <command> [options]\n\nCommands:\n  upload <file>          Upload a local file and return download URL\n  upload-dir <dir>       Upload local directory by iterating files\n  delete <resId>         Delete a single material by id\n  mkdir <name>           Create a folder\n  list                   List uploaded files\n  capacity               Query drive capacity\n  help                   Show this help\n\nShared environment variables:\n  SEEWO_COOKIE           Required. Full Cookie header value from browser request\n  SEEWO_BASE_URL         Optional. Default: https://pinco.seewo.com\n  SEEWO_CDN_BASE         Optional. Default: https://cstore-pri-pinco-bs.seewo.com/\n  SEEWO_X_SERVER         Optional. Default: default\n  SEEWO_X_CSRF_TOKEN     Optional. Default: undefined\n  SEEWO_LANGUAGE         Optional. Default: zh_CHS\n  SEEWO_USER_AGENT       Optional. Browser-like User-Agent\n\nCommand options:\n  upload <file>\n    --name <string>              Override file name\n    --mime-type <string>         Override MIME type\n    --parent-folder-id <id>      Default: 0\n    --debug                      Print upload policy diagnostics\n    --json                       Print JSON output\n\n  upload-dir <dir>\n    --parent-folder-id <id>      Default: 0\n    --remote-folder-name <name>  Remote root folder name (default: local dir name)\n    --no-root                    Do not create root folder; upload into parent folder directly\n    --flat                       Upload all files into one folder (ignore local subdirs)\n    --debug                      Print upload policy diagnostics\n    --json                       Print JSON output\n\n  delete <resId>\n    --id <resId>                 Material id\n    --json                       Print JSON output\n\n  mkdir <name>\n    --parent-folder-id <id>      Default: 0\n    --json                       Print JSON output\n\n  list\n    --folder-id <id>             Default: 0\n    --page <number>              Default: 0\n    --size <number>              Default: 50\n    --keyword <string>           Default: empty\n    --tag-name <string>          Default: resource\n    --resolve-url                Resolve auth URL to temporary signed URL\n    --all                        Load all pages\n    --json                       Print JSON output\n\n  capacity\n    --type <number>              Default: 1\n    --json                       Print JSON output\n\nExamples:\n  SEEWO_COOKIE='x-token=...;' seewo upload ./daily-quote.txt\n  SEEWO_COOKIE='...' seewo upload-dir ./assets\n  SEEWO_COOKIE='...' seewo delete 770339e1238a4cbb8c558fb8d2d319ac\n  SEEWO_COOKIE='...' seewo mkdir chapter-01\n  SEEWO_COOKIE='...' seewo list --all\n`;
+  const text = `seewo CLI\n\nUsage:\n  seewo <command> [options]\n\nCommands:\n  upload <file>          Upload a local file and return download URL\n  upload-dir <dir>       Upload local directory by iterating files\n  delete <resId>         Delete a single material by id\n  mkdir <name>           Create a folder\n  list                   List uploaded files\n  capacity               Query drive capacity\n  help                   Show this help\n\nShared environment variables:\n  SEEWO_COOKIE           Required. Full Cookie header value from browser request\n  SEEWO_BASE_URL         Optional. Default: https://pinco.seewo.com\n  SEEWO_CDN_BASE         Optional. Default: https://cstore-pri-pinco-bs.seewo.com/\n  SEEWO_X_SERVER         Optional. Default: default\n  SEEWO_X_CSRF_TOKEN     Optional. Default: undefined\n  SEEWO_LANGUAGE         Optional. Default: zh_CHS\n  SEEWO_USER_AGENT       Optional. Browser-like User-Agent\n\nCommand options:\n  upload <file>\n    --name <string>              Override file name\n    --mime-type <string>         Override MIME type\n    --parent-folder-id <id>      Default: 0\n    --debug                      Print upload policy diagnostics\n    --json                       Print JSON output\n\n  upload-dir <dir>\n    --parent-folder-id <id>      Default: 0\n    --remote-folder-name <name>  Remote root folder name (default: local dir name)\n    --no-root                    Do not create root folder; upload into parent folder directly\n    --flat                       Upload all files into one folder (ignore local subdirs)\n    --debug                      Print upload policy diagnostics\n    --json                       Print JSON output\n\n  delete <resId>\n    --id <resId>                 Material id\n    --json                       Print JSON output\n\n  mkdir <name>\n    --parent-folder-id <id>      Default: 0\n    --json                       Print JSON output\n\n  list\n    --folder-id <id>             Default: 0\n    --page <number>              Default: 0\n    --size <number>              Default: 50\n    --keyword <string>           Default: empty\n    --tag-name <string>          Default: resource,folder (both)\n    --resolve-url                Resolve auth URL to temporary signed URL\n    --all                        Load all pages\n    --json                       Print JSON output\n\n  capacity\n    --type <number>              Default: 1\n    --json                       Print JSON output\n\nExamples:\n  SEEWO_COOKIE='x-token=...;' seewo upload ./daily-quote.txt\n  SEEWO_COOKIE='...' seewo upload-dir ./assets\n  SEEWO_COOKIE='...' seewo delete 770339e1238a4cbb8c558fb8d2d319ac\n  SEEWO_COOKIE='...' seewo mkdir chapter-01\n  SEEWO_COOKIE='...' seewo list --all\n`;
   process.stdout.write(text);
 }
 
@@ -327,6 +327,7 @@ function summarizeItem(item) {
   return {
     id,
     resId: id,
+    type: detectItemType(item),
     name: pick(item, ['name', 'fileName']) || '-',
     mimeType: pick(item, ['mimeType', 'type']) || '-',
     size: Number(pick(item, ['size', 'fileSize']) || 0),
@@ -335,6 +336,94 @@ function summarizeItem(item) {
     createdAt: pick(item, ['createdAt', 'createTime', 'gmtCreate']) || '-',
     updatedAt: pick(item, ['updatedAt', 'updateTime', 'gmtModified']) || '-'
   };
+}
+
+function detectItemType(item) {
+  const fileFlag = pick(item, ['file', 'isFile']);
+  if (typeof fileFlag === 'boolean') {
+    return fileFlag ? 'file' : 'folder';
+  }
+
+  const folderFlag = pick(item, ['folder', 'isFolder']);
+  if (typeof folderFlag === 'boolean') {
+    return folderFlag ? 'folder' : 'file';
+  }
+
+  const mimeValue = pick(item, ['mimeType', 'type']);
+  if (typeof mimeValue === 'string') {
+    const mime = mimeValue.trim().toLowerCase();
+    if (mime === 'folder' || mime === 'directory' || mime === 'dir') {
+      return 'folder';
+    }
+    if (mime === 'resource' || mime === 'file') {
+      return 'file';
+    }
+    if (mime.includes('folder')) {
+      return 'folder';
+    }
+    if (mime.includes('/')) {
+      return 'file';
+    }
+  }
+
+  if (typeof mimeValue === 'number') {
+    if (mimeValue === 9) {
+      return 'folder';
+    }
+    if (mimeValue === 99) {
+      return 'file';
+    }
+  }
+
+  const typeTag = Number(pick(item, ['typeTag']));
+  if (typeTag === 1) {
+    return 'folder';
+  }
+  if (typeTag === 255) {
+    return 'file';
+  }
+
+  return 'file';
+}
+
+function resolveListTagNames(inputTagName) {
+  if (inputTagName === undefined || inputTagName === null || String(inputTagName).trim() === '') {
+    return ['resource', 'folder'];
+  }
+
+  const tags = [];
+  for (const rawTag of String(inputTagName).split(',')) {
+    const tag = rawTag.trim();
+    if (!tag) {
+      continue;
+    }
+
+    const lowerTag = tag.toLowerCase();
+    if (lowerTag === 'all' || tag === '*') {
+      tags.push('resource', 'folder');
+      continue;
+    }
+
+    tags.push(tag);
+  }
+
+  return [...new Set(tags)];
+}
+
+function dedupeSummarizedItems(items) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of items) {
+    const key = `${item.id}|${item.mimeType}|${item.name}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
 }
 
 class PincoClient {
@@ -882,37 +971,45 @@ async function handleList(options, client) {
   const page = Number(options.page ?? 0);
   const size = Number(options.size ?? 50);
   const keyword = options.keyword || '';
-  const tagName = options['tag-name'] || 'resource';
+  const tagNames = resolveListTagNames(options['tag-name']);
   const all = Boolean(options.all);
   const resolveUrl = Boolean(options['resolve-url']);
 
   const items = [];
 
   if (!all) {
-    const data = await client.getMaterials({ folderId, page, size, keyword, tagName });
-    items.push(...extractListItems(data));
+    for (const tagName of tagNames) {
+      const data = await client.getMaterials({ folderId, page, size, keyword, tagName });
+      items.push(...extractListItems(data));
+    }
   } else {
-    let currentPage = page;
-    while (true) {
-      const data = await client.getMaterials({ folderId, page: currentPage, size, keyword, tagName });
-      const pageItems = extractListItems(data);
-      items.push(...pageItems);
+    for (const tagName of tagNames) {
+      let currentPage = page;
+      while (true) {
+        const data = await client.getMaterials({ folderId, page: currentPage, size, keyword, tagName });
+        const pageItems = extractListItems(data);
+        items.push(...pageItems);
 
-      if (pageItems.length < size) {
-        break;
-      }
-      currentPage += 1;
+        if (pageItems.length < size) {
+          break;
+        }
+        currentPage += 1;
 
-      if (currentPage - page > 500) {
-        break;
+        if (currentPage - page > 500) {
+          break;
+        }
       }
     }
   }
 
-  const normalized = items.map(summarizeItem);
+  const normalized = dedupeSummarizedItems(items.map(summarizeItem));
   if (resolveUrl) {
     for (const item of normalized) {
-      if (typeof item.downloadUrl === 'string' && item.downloadUrl.includes('/server-main/api/v1/drive/materials/download')) {
+      if (
+        item.type === 'file' &&
+        typeof item.downloadUrl === 'string' &&
+        item.downloadUrl.includes('/server-main/api/v1/drive/materials/download')
+      ) {
         item.downloadUrl = await client.resolveDownloadUrl(item.downloadUrl);
       }
     }
@@ -926,6 +1023,7 @@ async function handleList(options, client) {
   process.stdout.write(`Total: ${normalized.length}\n`);
   for (const item of normalized) {
     process.stdout.write(`- ${item.name}\n`);
+    process.stdout.write(`  type: ${item.type}\n`);
     process.stdout.write(`  resId: ${item.resId}\n`);
     process.stdout.write(`  size: ${formatBytes(item.size)}\n`);
     process.stdout.write(`  mime: ${item.mimeType}\n`);

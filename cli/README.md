@@ -80,7 +80,7 @@ SEEWO_COOKIE='...' node src/cli.js upload ./daily-quote.txt --json
 - 上传耗时（OSS 直传阶段）
 - 上传速度（按 `文件大小 / 上传耗时` 计算）
 
-### 3.2 列出文件
+### 3.2 列出文件和文件夹
 
 ```bash
 node src/cli.js list
@@ -92,7 +92,7 @@ node src/cli.js list
 - `--page <number>`：页码，默认 `0`
 - `--size <number>`：每页数量，默认 `50`
 - `--keyword <string>`：关键词过滤
-- `--tag-name <string>`：默认 `resource`
+- `--tag-name <string>`：默认 `resource,folder`（同时拉取文件和文件夹；也支持 `all` / `*`）
 - `--resolve-url`：把鉴权下载地址解析为临时签名直链
 - `--all`：自动翻页拉取全部
 - `--json`：JSON 输出
@@ -106,6 +106,7 @@ SEEWO_COOKIE='...' node src/cli.js list --all --json
 说明：
 
 - `list --json` 里的 `id` 与 `resId` 是同一个值，都可用于 `delete <resId>`。
+- `list --json` 每个条目会包含 `type` 字段，值为 `file` 或 `folder`。
 
 ### 3.3 删除单文件
 
