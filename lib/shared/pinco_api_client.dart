@@ -11,6 +11,7 @@ class PincoApiClient {
       : _httpClient = httpClient ?? http.Client();
 
   static final _random = Random();
+  static const String _baseUrl = 'https://pinco.seewo.com';
 
   final http.Client _httpClient;
   final Map<String, UserProfile> _userProfileCache = <String, UserProfile>{};
@@ -97,13 +98,18 @@ class PincoApiClient {
     return materials;
   }
 
+  String buildMaterialDownloadUrl(String materialId) {
+    return '$_baseUrl/server-main/api/v1/drive/materials/download'
+        '?resId=${Uri.encodeQueryComponent(materialId)}';
+  }
+
   Future<dynamic> _postAction({
     required String actionName,
     required String cookie,
     required Map<String, dynamic> payload,
   }) async {
     final uri = Uri.parse(
-      'https://pinco.seewo.com/teacher/api.json?actionName=$actionName',
+      '$_baseUrl/teacher/api.json?actionName=$actionName',
     );
 
     final response = await _httpClient.post(

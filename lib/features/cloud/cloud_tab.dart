@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_icon/file_icon.dart';
 
 import '../../shared/models/drive_material.dart';
@@ -149,16 +150,21 @@ class _CloudTabState extends State<CloudTab> {
             ..._materials.map(
               (item) => Card(
                 clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  leading: item.isFolder
-                      ? const Icon(Icons.folder_outlined)
-                      : FileIcon(item.name, size: 24),
-                  title: Text(item.name),
-                  subtitle: Text(_buildSubtitle(item)),
-                  trailing: item.isFolder
-                      ? const Icon(Icons.chevron_right_rounded)
-                      : null,
-                  onTap: () => _handleItemTap(item),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onSecondaryTapDown: (details) =>
+                      _showItemContextMenu(details.globalPosition, item),
+                  child: ListTile(
+                    leading: item.isFolder
+                        ? const Icon(Icons.folder_outlined)
+                        : FileIcon(item.name, size: 24),
+                    title: Text(item.name),
+                    subtitle: Text(_buildSubtitle(item)),
+                    trailing: item.isFolder
+                        ? const Icon(Icons.chevron_right_rounded)
+                        : null,
+                    onTap: () => _handleItemTap(item),
+                  ),
                 ),
               ),
             ),
@@ -288,6 +294,72 @@ class _CloudTabState extends State<CloudTab> {
     );
   }
 
+  Future<void> _showItemContextMenu(Offset position, DriveMaterial item) async {
+    final selected = await showMenu<_ItemMenuAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: _ItemMenuAction.copyName,
+          child: Text('复制文件名'),
+        ),
+        if (!item.isFolder)
+          const PopupMenuItem(
+            value: _ItemMenuAction.copyDownloadUrl,
+            child: Text('复制下载链接'),
+          ),
+      ],
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    switch (selected) {
+      case _ItemMenuAction.copyName:
+        await _copyText(item.name, '已复制文件名');
+        break;
+      case _ItemMenuAction.copyDownloadUrl:
+        final downloadUrl = _buildDownloadUrl(item);
+        if (downloadUrl == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('未找到可用下载链接。')),
+          );
+          return;
+        }
+        await _copyText(downloadUrl, '已复制下载链接');
+        break;
+    }
+  }
+
+  String? _buildDownloadUrl(DriveMaterial item) {
+    final rawDownloadUrl = item.downloadUrl?.trim();
+    if (rawDownloadUrl != null && rawDownloadUrl.isNotEmpty) {
+      return rawDownloadUrl;
+    }
+
+    if (item.id.trim().isEmpty) {
+      return null;
+    }
+
+    return widget.apiClient.buildMaterialDownloadUrl(item.id);
+  }
+
+  Future<void> _copyText(String text, String message) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';
@@ -304,6 +376,11 @@ class _CloudTabState extends State<CloudTab> {
 
     return '${value.toStringAsFixed(2)} ${units[unitIndex]}';
   }
+}
+
+enum _ItemMenuAction {
+  copyName,
+  copyDownloadUrl,
 }
 
 class _FolderEntry {
