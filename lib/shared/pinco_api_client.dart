@@ -667,12 +667,33 @@ class PincoApiClient {
 
   _NormalizedUploadPolicy _normalizeUploadPolicy(
       dynamic payload, String fileName) {
-    final policyData =
+    var policyData =
         _pickObject(payload, ['policyData', 'uploadPolicy', 'data', 'result']);
+    if (policyData.isEmpty) {
+      policyData = _coerceMap(payload);
+    }
+    if (policyData.isEmpty && payload is List) {
+      for (final item in payload) {
+        final map = _coerceMap(item);
+        if (map.isNotEmpty) {
+          policyData = map;
+          break;
+        }
+      }
+    }
     final policyList = policyData['policyList'];
     Map<String, dynamic>? policyEntry;
     if (policyList is List) {
       for (final item in policyList) {
+        final map = _coerceMap(item);
+        if (map.isNotEmpty) {
+          policyEntry = map;
+          break;
+        }
+      }
+    }
+    if (policyEntry == null && payload is List) {
+      for (final item in payload) {
         final map = _coerceMap(item);
         if (map.isNotEmpty) {
           policyEntry = map;
