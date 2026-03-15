@@ -389,6 +389,11 @@ class _CloudTabState extends State<CloudTab> {
             value: _ItemMenuAction.copyDownloadUrl,
             child: Text('复制下载链接'),
           ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: _ItemMenuAction.delete,
+          child: Text(item.isFolder ? '删除文件夹' : '删除文件'),
+        ),
       ],
     );
 
@@ -412,6 +417,9 @@ class _CloudTabState extends State<CloudTab> {
           return;
         }
         await _copyText(downloadUrl, '已复制下载链接');
+        break;
+      case _ItemMenuAction.delete:
+        await _deleteItem(item);
         break;
     }
   }
@@ -518,6 +526,38 @@ class _CloudTabState extends State<CloudTab> {
     }
   }
 
+  Future<void> _deleteItem(DriveMaterial item) async {
+    final confirmed = await _showDeleteConfirmDialog(item);
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.apiClient.deleteMaterials(
+        cookie: widget.cookie,
+        materialIds: [item.id],
+      );
+
+      if (!mounted) {
+        return;
+      }
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(item.isFolder ? '文件夹已删除。' : '文件已删除。')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('删除失败：$error')),
+      );
+    }
+  }
+
   Future<String?> _showRenameDialog(String initialName) async {
     var renamed = initialName;
     return showDialog<String>(
@@ -584,6 +624,33 @@ class _CloudTabState extends State<CloudTab> {
     );
   }
 
+  Future<bool?> _showDeleteConfirmDialog(DriveMaterial item) {
+    final itemType = item.isFolder ? '文件夹' : '文件';
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('删除$itemType'),
+          content: Text('确认删除「${item.name}」吗？此操作不可撤销。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              ),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';
@@ -606,6 +673,7 @@ enum _ItemMenuAction {
   rename,
   copyName,
   copyDownloadUrl,
+  delete,
 }
 
 class _FolderEntry {

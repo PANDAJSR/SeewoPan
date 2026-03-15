@@ -226,6 +226,36 @@ class PincoApiClient {
     _materialsCache.clear();
   }
 
+  Future<void> deleteMaterials({
+    required String cookie,
+    required List<String> materialIds,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialIds = materialIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialIds.isEmpty) {
+      throw ArgumentError.value(
+        materialIds,
+        'materialIds',
+        'Material IDs cannot be empty.',
+      );
+    }
+
+    await _postAction(
+      actionName: 'DeleteV1DriveMaterials',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{'resIds': normalizedMaterialIds},
+    );
+
+    _materialsCache.clear();
+  }
+
   Future<String> createFolder({
     required String cookie,
     required String name,
