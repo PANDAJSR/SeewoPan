@@ -100,6 +100,7 @@ class PincoApiClient {
       'https://cstore-private.oss-cn-hangzhou.aliyuncs.com';
   static const String _defaultCdnBase =
       'https://cstore-pri-pinco-bs.seewo.com/';
+  static const int _uploadChunkSizeBytes = 256 * 1024;
 
   final http.Client _httpClient;
   final Dio _dioClient;
@@ -462,6 +463,7 @@ class PincoApiClient {
       bytes: bytes,
       fileName: normalizedName,
       mimeType: resolvedMimeType,
+      chunkSizeBytes: _uploadChunkSizeBytes,
       onProgress: onProgress == null
           ? null
           : (sent, total) {
@@ -542,6 +544,7 @@ class PincoApiClient {
     required Uint8List bytes,
     required String fileName,
     required String mimeType,
+    required int chunkSizeBytes,
     void Function(int sent, int total)? onProgress,
   }) async {
     final formData = FormData();
@@ -583,8 +586,9 @@ class PincoApiClient {
     formData.files.add(
       MapEntry(
         'file',
-        MultipartFile.fromBytes(
-          bytes,
+        MultipartFile.fromStream(
+          () => _chunkedByteStream(bytes, chunkSizeBytes),
+          bytes.lengthInBytes,
           filename: fileName,
           contentType: DioMediaType.parse(mimeType),
         ),
@@ -616,6 +620,17 @@ class PincoApiClient {
     final statusCode = response.statusCode ?? 0;
     if (statusCode < 200 || statusCode >= 300) {
       throw Exception('OSS upload failed ($statusCode)');
+    }
+  }
+
+  Stream<List<int>> _chunkedByteStream(Uint8List bytes, int chunkSizeBytes) async* {
+    final normalizedChunkSize =
+        chunkSizeBytes <= 0 ? 64 * 1024 : chunkSizeBytes;
+    var offset = 0;
+    while (offset < bytes.lengthInBytes) {
+      final end = min(offset + normalizedChunkSize, bytes.lengthInBytes);
+      yield Uint8List.sublistView(bytes, offset, end);
+      offset = end;
     }
   }
 
