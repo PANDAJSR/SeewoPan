@@ -75,7 +75,7 @@ class _ProfileTabState extends State<ProfileTab> {
     _maybeAutoFetchUserInfo();
   }
 
-  Future<void> _fetchUserInfo() async {
+  Future<void> _fetchUserInfo({bool forceRefresh = false}) async {
     final cookie = _cookieController.text.trim();
     if (cookie.isEmpty) {
       setState(() {
@@ -90,7 +90,10 @@ class _ProfileTabState extends State<ProfileTab> {
     });
 
     try {
-      final profile = await widget.apiClient.getUserInfo(cookie);
+      final profile = await widget.apiClient.getUserInfo(
+        cookie,
+        forceRefresh: forceRefresh,
+      );
 
       if (!mounted) {
         return;
@@ -159,7 +162,9 @@ class _ProfileTabState extends State<ProfileTab> {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed:
-                  hasCookie && !_isLoadingUserInfo ? _fetchUserInfo : null,
+                  hasCookie && !_isLoadingUserInfo
+                      ? () => _fetchUserInfo(forceRefresh: true)
+                      : null,
               icon: _isLoadingUserInfo
                   ? const SizedBox(
                       width: 16,

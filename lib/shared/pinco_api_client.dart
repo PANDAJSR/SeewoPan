@@ -13,11 +13,25 @@ class PincoApiClient {
   static final _random = Random();
 
   final http.Client _httpClient;
+  final Map<String, UserProfile> _userProfileCache = <String, UserProfile>{};
+  final Map<String, List<DriveMaterial>> _rootMaterialsCache =
+      <String, List<DriveMaterial>>{};
 
-  Future<UserProfile> getUserInfo(String cookie) async {
+  Future<UserProfile> getUserInfo(
+    String cookie, {
+    bool forceRefresh = false,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    if (!forceRefresh) {
+      final cached = _userProfileCache[normalizedCookie];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     final data = await _postAction(
       actionName: 'GetV1UsersInfo',
-      cookie: cookie,
+      cookie: normalizedCookie,
       payload: <String, dynamic>{},
     );
 
@@ -25,17 +39,29 @@ class PincoApiClient {
       throw const FormatException('Missing user data.');
     }
 
-    return UserProfile.fromApi(data);
+    final profile = UserProfile.fromApi(data);
+    _userProfileCache[normalizedCookie] = profile;
+    return profile;
   }
 
   Future<List<DriveMaterial>> getRootMaterials({
     required String cookie,
     int page = 0,
     int size = 50,
+    bool forceRefresh = false,
   }) async {
+    final normalizedCookie = cookie.trim();
+    final cacheKey = '$normalizedCookie::$page::$size';
+    if (!forceRefresh) {
+      final cached = _rootMaterialsCache[cacheKey];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     final data = await _postAction(
       actionName: 'GetV1DriveMaterials',
-      cookie: cookie,
+      cookie: normalizedCookie,
       payload: <String, dynamic>{
         'keyword': '',
         'size': size,
@@ -46,10 +72,12 @@ class PincoApiClient {
     );
 
     final rawList = _extractList(data);
-    return rawList
+    final materials = rawList
         .whereType<Map<String, dynamic>>()
         .map(DriveMaterial.fromApi)
         .toList(growable: false);
+    _rootMaterialsCache[cacheKey] = materials;
+    return materials;
   }
 
   Future<dynamic> _postAction({

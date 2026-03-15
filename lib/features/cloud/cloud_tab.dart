@@ -47,7 +47,7 @@ class _CloudTabState extends State<CloudTab> {
     await _loadMaterials();
   }
 
-  Future<void> _loadMaterials() async {
+  Future<void> _loadMaterials({bool forceRefresh = false}) async {
     setState(() {
       _isLoading = true;
       _error = null;
@@ -56,6 +56,7 @@ class _CloudTabState extends State<CloudTab> {
     try {
       final items = await widget.apiClient.getRootMaterials(
         cookie: widget.cookie.trim(),
+        forceRefresh: forceRefresh,
       );
 
       if (!mounted) {
@@ -95,7 +96,7 @@ class _CloudTabState extends State<CloudTab> {
 
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: _loadMaterials,
+        onRefresh: () => _loadMaterials(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -108,7 +109,9 @@ class _CloudTabState extends State<CloudTab> {
                 ),
                 const Spacer(),
                 IconButton(
-                  onPressed: _isLoading ? null : _loadMaterials,
+                  onPressed: _isLoading
+                      ? null
+                      : () => _loadMaterials(forceRefresh: true),
                   icon: _isLoading
                       ? const SizedBox(
                           width: 16,
