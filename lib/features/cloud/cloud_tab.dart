@@ -115,6 +115,11 @@ class _CloudTabState extends State<CloudTab> {
                 ),
                 const Spacer(),
                 IconButton(
+                  onPressed: _isLoading ? null : _createFolder,
+                  icon: const Icon(Icons.create_new_folder_outlined),
+                  tooltip: '新建文件夹',
+                ),
+                IconButton(
                   onPressed: _isLoading
                       ? null
                       : () => _loadMaterials(forceRefresh: true),
@@ -410,6 +415,44 @@ class _CloudTabState extends State<CloudTab> {
     }
   }
 
+  Future<void> _createFolder() async {
+    final folderName = await _showCreateFolderDialog();
+    if (folderName == null || !mounted) {
+      return;
+    }
+
+    final normalizedName = folderName.trim();
+    if (normalizedName.isEmpty) {
+      return;
+    }
+
+    try {
+      await widget.apiClient.createFolder(
+        cookie: widget.cookie,
+        name: normalizedName,
+        parentFolderId: _currentFolderId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文件夹创建成功。')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('新建文件夹失败：$error')),
+      );
+    }
+  }
+
   Future<String?> _showRenameDialog(String initialName) async {
     var renamed = initialName;
     return showDialog<String>(
@@ -436,6 +479,39 @@ class _CloudTabState extends State<CloudTab> {
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(renamed.trim()),
               child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _showCreateFolderDialog() async {
+    var folderName = '';
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('新建文件夹'),
+          content: TextFormField(
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '文件夹名称',
+              hintText: '请输入文件夹名称',
+            ),
+            onChanged: (value) => folderName = value,
+            onFieldSubmitted: (value) =>
+                Navigator.of(dialogContext).pop(value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(folderName.trim()),
+              child: const Text('创建'),
             ),
           ],
         );

@@ -95,4 +95,65 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+
+  test('createFolder should call create action and clear cache', () async {
+    var listCallCount = 0;
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        listCallCount += 1;
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': 'existing-file.txt',
+                  'type': 'resource',
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'PostV1DriveMaterialsFolders') {
+        expect(request.method, 'POST');
+        expect(request.headers['cookie'], 'token=abc');
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(payload['name'], 'lesson-1');
+        expect(payload['parentFolderId'], '123');
+
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {'id': 'folder-001'},
+            'message': 'ok',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+    await client.getMaterials(cookie: 'token=abc', folderId: '123');
+    expect(listCallCount, 1);
+
+    final folderId = await client.createFolder(
+      cookie: 'token=abc',
+      name: 'lesson-1',
+      parentFolderId: '123',
+    );
+    expect(folderId, 'folder-001');
+
+    await client.getMaterials(cookie: 'token=abc', folderId: '123');
+    expect(listCallCount, 2);
+  });
 }

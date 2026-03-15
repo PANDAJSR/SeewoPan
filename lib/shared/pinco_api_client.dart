@@ -142,6 +142,52 @@ class PincoApiClient {
     _materialsCache.clear();
   }
 
+  Future<String> createFolder({
+    required String cookie,
+    required String name,
+    String parentFolderId = '0',
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedName = name.trim();
+    final normalizedParentFolderId = parentFolderId.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Folder name cannot be empty.');
+    }
+    if (normalizedParentFolderId.isEmpty) {
+      throw ArgumentError.value(
+        parentFolderId,
+        'parentFolderId',
+        'Parent folder ID cannot be empty.',
+      );
+    }
+
+    final data = await _postAction(
+      actionName: 'PostV1DriveMaterialsFolders',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'name': normalizedName,
+        'parentFolderId': normalizedParentFolderId,
+      },
+    );
+
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Missing folder data.');
+    }
+
+    final folderId =
+        _pick(data, ['id', 'folderId', 'resId'])?.toString().trim();
+    if (folderId == null || folderId.isEmpty) {
+      throw const FormatException('Missing folder id.');
+    }
+
+    _materialsCache.clear();
+    return folderId;
+  }
+
   Future<dynamic> _postAction({
     required String actionName,
     required String cookie,
