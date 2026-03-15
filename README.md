@@ -4,7 +4,6 @@ SeewoPan 是一个基于 Flutter 开发的「希沃品课云盘」第三方客�
 
 ## 项目状态
 
-- 当前阶段：最小可运行工程
 - 设计语言：Material Design 3
 - 目标平台：Android、iOS、Web、macOS、Windows、Linux
 
