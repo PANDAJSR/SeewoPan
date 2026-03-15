@@ -14,7 +14,7 @@ class PincoApiClient {
 
   final http.Client _httpClient;
   final Map<String, UserProfile> _userProfileCache = <String, UserProfile>{};
-  final Map<String, List<DriveMaterial>> _rootMaterialsCache =
+  final Map<String, List<DriveMaterial>> _materialsCache =
       <String, List<DriveMaterial>>{};
 
   Future<UserProfile> getUserInfo(
@@ -50,10 +50,27 @@ class PincoApiClient {
     int size = 50,
     bool forceRefresh = false,
   }) async {
+    return getMaterials(
+      cookie: cookie,
+      folderId: '0',
+      page: page,
+      size: size,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<DriveMaterial>> getMaterials({
+    required String cookie,
+    required String folderId,
+    int page = 0,
+    int size = 50,
+    String tagName = 'resource,folder',
+    bool forceRefresh = false,
+  }) async {
     final normalizedCookie = cookie.trim();
-    final cacheKey = '$normalizedCookie::$page::$size';
+    final cacheKey = '$normalizedCookie::$folderId::$page::$size::$tagName';
     if (!forceRefresh) {
-      final cached = _rootMaterialsCache[cacheKey];
+      final cached = _materialsCache[cacheKey];
       if (cached != null) {
         return cached;
       }
@@ -65,9 +82,9 @@ class PincoApiClient {
       payload: <String, dynamic>{
         'keyword': '',
         'size': size,
-        'tagName': 'resource',
+        'tagName': tagName,
         'page': page,
-        'folderId': '0',
+        'folderId': folderId,
       },
     );
 
@@ -76,7 +93,7 @@ class PincoApiClient {
         .whereType<Map<String, dynamic>>()
         .map(DriveMaterial.fromApi)
         .toList(growable: false);
-    _rootMaterialsCache[cacheKey] = materials;
+    _materialsCache[cacheKey] = materials;
     return materials;
   }
 

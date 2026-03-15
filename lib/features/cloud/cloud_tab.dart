@@ -23,6 +23,7 @@ class _CloudTabState extends State<CloudTab> {
   bool _isLoading = false;
   String? _error;
   List<DriveMaterial> _materials = const [];
+  List<_FolderEntry> _folderPath = const [];
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _CloudTabState extends State<CloudTab> {
     if (oldWidget.cookie != widget.cookie) {
       _materials = const [];
       _error = null;
+      _folderPath = const [];
       _tryLoadIfReady();
     }
   }
@@ -48,14 +50,16 @@ class _CloudTabState extends State<CloudTab> {
   }
 
   Future<void> _loadMaterials({bool forceRefresh = false}) async {
+    final folderId = _currentFolderId;
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final items = await widget.apiClient.getRootMaterials(
+      final items = await widget.apiClient.getMaterials(
         cookie: widget.cookie.trim(),
+        folderId: folderId,
         forceRefresh: forceRefresh,
       );
 
@@ -124,6 +128,8 @@ class _CloudTabState extends State<CloudTab> {
               ],
             ),
             const SizedBox(height: 8),
+            _buildFolderPath(context),
+            const SizedBox(height: 8),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -141,6 +147,7 @@ class _CloudTabState extends State<CloudTab> {
               ),
             ..._materials.map(
               (item) => Card(
+                clipBehavior: Clip.antiAlias,
                 child: ListTile(
                   leading: Icon(
                     item.isFolder
@@ -149,6 +156,10 @@ class _CloudTabState extends State<CloudTab> {
                   ),
                   title: Text(item.name),
                   subtitle: Text(_buildSubtitle(item)),
+                  trailing: item.isFolder
+                      ? const Icon(Icons.chevron_right_rounded)
+                      : null,
+                  onTap: () => _handleItemTap(item),
                 ),
               ),
             ),
@@ -172,6 +183,65 @@ class _CloudTabState extends State<CloudTab> {
     return parts.join(' · ');
   }
 
+  String get _currentFolderId =>
+      _folderPath.isEmpty ? '0' : _folderPath.last.folderId;
+
+  Widget _buildFolderPath(BuildContext context) {
+    final pathLabels = <String>['根目录', ..._folderPath.map((e) => e.name)];
+    return Row(
+      children: [
+        IconButton(
+          onPressed: _folderPath.isNotEmpty && !_isLoading ? _goBack : null,
+          icon: const Icon(Icons.arrow_back),
+          tooltip: '返回上级',
+        ),
+        Expanded(
+          child: Text(
+            pathLabels.join(' / '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _goBack() async {
+    if (_folderPath.isEmpty || _isLoading) {
+      return;
+    }
+
+    setState(() {
+      _folderPath = _folderPath.sublist(0, _folderPath.length - 1);
+    });
+    await _loadMaterials();
+  }
+
+  Future<void> _handleItemTap(DriveMaterial item) async {
+    if (_isLoading) {
+      return;
+    }
+
+    if (item.isFolder) {
+      setState(() {
+        _folderPath = [
+          ..._folderPath,
+          _FolderEntry(folderId: item.folderId, name: item.name),
+        ];
+      });
+      await _loadMaterials();
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('文件预览功能开发中。')),
+    );
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) {
       return '$bytes B';
@@ -188,4 +258,14 @@ class _CloudTabState extends State<CloudTab> {
 
     return '${value.toStringAsFixed(2)} ${units[unitIndex]}';
   }
+}
+
+class _FolderEntry {
+  const _FolderEntry({
+    required this.folderId,
+    required this.name,
+  });
+
+  final String folderId;
+  final String name;
 }
