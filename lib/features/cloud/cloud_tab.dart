@@ -410,7 +410,7 @@ class _CloudTabState extends State<CloudTab> {
   Future<String?> _showRenameDialog(String initialName) async {
     final controller = TextEditingController(text: initialName);
     try {
-      return showDialog<String>(
+      return await showDialog<String>(
         context: context,
         builder: (context) {
           return AlertDialog(
