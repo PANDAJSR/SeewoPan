@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 void main() {
   runApp(const MyApp());
@@ -37,6 +39,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   bool _isLoadingCookie = true;
   bool _isSavingCookie = false;
   bool _cookieSaved = false;
+  bool _isLoadingUserInfo = false;
+  String? _userDisplayName;
+  String? _userInfoError;
 
   static const List<_NavItem> _items = [
     _NavItem(
@@ -198,6 +203,34 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   ),
               ],
             ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: hasCookie && !_isLoadingUserInfo ? _fetchUserInfo : null,
+              icon: _isLoadingUserInfo
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_search_outlined),
+              label: Text(_isLoadingUserInfo ? '获取中...' : '获取用户信息'),
+            ),
+            const SizedBox(height: 12),
+            if (_userDisplayName != null)
+              Text(
+                '用户名：$_userDisplayName',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            if (_userInfoError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _userInfoError!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+              ),
           ],
         ),
       ),
@@ -235,6 +268,78 @@ class _HomeShellPageState extends State<HomeShellPage> {
       _isSavingCookie = false;
       _cookieSaved = value.isNotEmpty;
     });
+  }
+
+  Future<void> _fetchUserInfo() async {
+    setState(() {
+      _isLoadingUserInfo = true;
+      _userInfoError = null;
+    });
+
+    final cookie = _cookieController.text.trim();
+
+    try {
+      final uri = Uri.parse(
+        'https://pinco.seewo.com/teacher/api.json?actionName=GetV1UsersInfo',
+      );
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Accept': '*/*',
+          'Content-Type': 'application/json;charset=UTF-8',
+          'x-language': 'zh_CHS',
+          'x-server': 'default',
+          'Cookie': cookie,
+        },
+        body: jsonEncode(<String, dynamic>{}),
+      );
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Unexpected response format.');
+      }
+
+      final statusCode = decoded['statusCode'];
+      if (statusCode != 0) {
+        final message = decoded['message']?.toString() ?? '接口返回错误';
+        throw Exception(message);
+      }
+
+      final data = decoded['data'];
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Missing user data.');
+      }
+
+      final nickName = data['nickName']?.toString().trim();
+      final realName = data['realName']?.toString().trim();
+      final username = data['username']?.toString().trim();
+
+      final displayName = [nickName, realName, username]
+          .whereType<String>()
+          .where((value) => value.isNotEmpty)
+          .join(' / ');
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingUserInfo = false;
+        _userDisplayName = displayName.isEmpty ? null : displayName;
+        _userInfoError = displayName.isEmpty ? '未获取到用户名字段。' : null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingUserInfo = false;
+        _userDisplayName = null;
+        _userInfoError = '获取失败：$error';
+      });
+    }
   }
 }
 
