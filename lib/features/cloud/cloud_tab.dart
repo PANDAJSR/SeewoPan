@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:file_icon/file_icon.dart';
 
 import '../transfer/upload_task_manager.dart';
@@ -313,24 +313,40 @@ class _CloudTabState extends State<CloudTab> {
   }
 
   Future<void> _pickAndUploadFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
-    );
-    if (result == null || !mounted) {
+    List<XFile> selectedFiles = const [];
+    try {
+      selectedFiles = await openFiles();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('打开文件选择器失败：$error')),
+      );
       return;
     }
 
-    final files = result.files
-        .where((file) => file.bytes != null && file.bytes!.isNotEmpty)
-        .map(
-          (file) => UploadSourceFile(
-            name: file.name,
-            bytes: file.bytes!,
-            parentFolderId: _currentFolderId,
-          ),
-        )
-        .toList(growable: false);
+    if (selectedFiles.isEmpty || !mounted) {
+      return;
+    }
+
+    final files = <UploadSourceFile>[];
+    for (final file in selectedFiles) {
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        continue;
+      }
+      files.add(
+        UploadSourceFile(
+          name: file.name,
+          bytes: bytes,
+          parentFolderId: _currentFolderId,
+        ),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
 
     if (files.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
