@@ -42,6 +42,10 @@ class _HomeShellPageState extends State<HomeShellPage> {
   bool _isLoadingUserInfo = false;
   String? _userDisplayName;
   String? _userInfoError;
+  String? _userPhotoUrl;
+  String? _userRealName;
+  String? _userUsername;
+  String? _userSchoolName;
 
   static const List<_NavItem> _items = [
     _NavItem(
@@ -146,20 +150,99 @@ class _HomeShellPageState extends State<HomeShellPage> {
     }
 
     final hasCookie = _cookieController.text.trim().isNotEmpty;
+    final hasLoadedUser = hasCookie && _userDisplayName != null;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (hasLoadedUser)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundImage: _userPhotoUrl?.isNotEmpty == true
+                            ? NetworkImage(_userPhotoUrl!)
+                            : null,
+                        child: _userPhotoUrl?.isNotEmpty == true
+                            ? null
+                            : const Icon(Icons.person),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _userDisplayName!,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            if (_userRealName != null &&
+                                _userRealName!.isNotEmpty &&
+                                _userRealName != _userDisplayName)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '姓名：$_userRealName',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            if (_userUsername != null && _userUsername!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '账号：$_userUsername',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                            if (_userSchoolName != null &&
+                                _userSchoolName!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '学校：$_userSchoolName',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (!hasLoadedUser)
+              Text(
+                hasCookie ? '已检测到 Cookie，点击下方按钮获取用户资料。' : '当前未设置 Cookie，请先填写并保存。',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: hasCookie && !_isLoadingUserInfo ? _fetchUserInfo : null,
+              icon: _isLoadingUserInfo
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.person_search_outlined),
+              label: Text(_isLoadingUserInfo ? '获取中...' : '获取用户信息'),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 28),
             Text(
               'Cookie 设置',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
-              hasCookie ? '已检测到 Cookie，可在下方修改并保存。' : '当前未设置 Cookie，请先填写并保存。',
+              '修改后请重新保存，再点击“获取用户信息”刷新上方资料。',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -172,14 +255,15 @@ class _HomeShellPageState extends State<HomeShellPage> {
                 hintText: '请输入 Cookie',
               ),
               onChanged: (_) {
-                if (_cookieSaved) {
+                if (_cookieSaved || _userDisplayName != null) {
                   setState(() {
                     _cookieSaved = false;
+                    _resetUserProfile();
                   });
                 }
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             Row(
               children: [
                 FilledButton.icon(
@@ -203,27 +287,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   ),
               ],
             ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: hasCookie && !_isLoadingUserInfo ? _fetchUserInfo : null,
-              icon: _isLoadingUserInfo
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_search_outlined),
-              label: Text(_isLoadingUserInfo ? '获取中...' : '获取用户信息'),
-            ),
-            const SizedBox(height: 12),
-            if (_userDisplayName != null)
-              Text(
-                '用户名：$_userDisplayName',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
             if (_userInfoError != null)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 12),
                 child: Text(
                   _userInfoError!,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -267,6 +333,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
     setState(() {
       _isSavingCookie = false;
       _cookieSaved = value.isNotEmpty;
+      _resetUserProfile();
     });
   }
 
@@ -314,6 +381,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
       final nickName = data['nickName']?.toString().trim();
       final realName = data['realName']?.toString().trim();
       final username = data['username']?.toString().trim();
+      final photoUrl = data['photoUrl']?.toString().trim();
+      final schoolName = data['schoolName']?.toString().trim();
 
       final displayName = [nickName, realName, username]
           .whereType<String>()
@@ -327,6 +396,10 @@ class _HomeShellPageState extends State<HomeShellPage> {
       setState(() {
         _isLoadingUserInfo = false;
         _userDisplayName = displayName.isEmpty ? null : displayName;
+        _userRealName = realName?.isNotEmpty == true ? realName : null;
+        _userUsername = username?.isNotEmpty == true ? username : null;
+        _userPhotoUrl = photoUrl?.isNotEmpty == true ? photoUrl : null;
+        _userSchoolName = schoolName?.isNotEmpty == true ? schoolName : null;
         _userInfoError = displayName.isEmpty ? '未获取到用户名字段。' : null;
       });
     } catch (error) {
@@ -336,10 +409,18 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
       setState(() {
         _isLoadingUserInfo = false;
-        _userDisplayName = null;
+        _resetUserProfile();
         _userInfoError = '获取失败：$error';
       });
     }
+  }
+
+  void _resetUserProfile() {
+    _userDisplayName = null;
+    _userPhotoUrl = null;
+    _userRealName = null;
+    _userUsername = null;
+    _userSchoolName = null;
   }
 }
 
