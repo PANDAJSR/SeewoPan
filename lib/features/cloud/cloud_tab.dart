@@ -89,12 +89,24 @@ class _CloudTabState extends State<CloudTab> {
                 ),
                 const Spacer(),
                 if (_isSelectionMode)
-                  IconButton(
-                    onPressed: _isLoading || _selectedCount == 0
-                        ? null
-                        : _deleteSelectedItems,
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: '删除所选',
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _isLoading || _selectedCount == 0
+                            ? null
+                            : _moveSelectedItems,
+                        icon: const Icon(Icons.drive_file_move_outline),
+                        tooltip: '移动所选',
+                      ),
+                      IconButton(
+                        onPressed: _isLoading || _selectedCount == 0
+                            ? null
+                            : _deleteSelectedItems,
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: '删除所选',
+                      ),
+                    ],
                   )
                 else ...[
                   IconButton(

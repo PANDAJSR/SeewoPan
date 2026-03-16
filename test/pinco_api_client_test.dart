@@ -154,6 +154,66 @@ void main() {
     expect(listCallCount, 2);
   });
 
+  test('moveMaterials should call move action and clear cache', () async {
+    var listCallCount = 0;
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        listCallCount += 1;
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': 'to-move.txt',
+                  'type': 'resource',
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'PutV1DriveMaterialsLocations') {
+        expect(request.method, 'POST');
+        expect(request.headers['cookie'], 'token=abc');
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(payload['resIdList'], ['m1']);
+        expect(payload['targetFolderId'], 'folder-2');
+
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': true,
+            'message': 'ok',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+    await client.getMaterials(cookie: 'token=abc', folderId: '0');
+    expect(listCallCount, 1);
+
+    await client.moveMaterials(
+      cookie: 'token=abc',
+      materialIds: const ['m1'],
+      targetFolderId: 'folder-2',
+    );
+
+    await client.getMaterials(cookie: 'token=abc', folderId: '0');
+    expect(listCallCount, 2);
+  });
+
   test('createFolder should call create action and clear cache', () async {
     var listCallCount = 0;
     final mockClient = MockClient((request) async {

@@ -10,6 +10,16 @@ class _FolderEntry {
   final String name;
 }
 
+class _MoveTargetFolderResult {
+  const _MoveTargetFolderResult({
+    required this.folderId,
+    required this.name,
+  });
+
+  final String folderId;
+  final String name;
+}
+
 extension _CloudTabDialogsAndFormatExtension on _CloudTabState {
   String _buildSubtitle(DriveMaterial item) {
     final parts = <String>[];
@@ -207,6 +217,206 @@ extension _CloudTabDialogsAndFormatExtension on _CloudTabState {
               child: const Text('删除'),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Future<_MoveTargetFolderResult?> _showMoveTargetFolderDialog({
+    required List<_FolderEntry> initialPath,
+    Set<String> blockedFolderIds = const <String>{},
+  }) {
+    final blocked = blockedFolderIds;
+    var path = List<_FolderEntry>.from(initialPath);
+    var loading = false;
+    var hasLoaded = false;
+    String? errorText;
+    List<DriveMaterial> childFolders = const [];
+
+    Future<void> loadFolders(StateSetter setDialogState) async {
+      setDialogState(() {
+        loading = true;
+        errorText = null;
+      });
+
+      try {
+        final folderId = path.isEmpty ? '0' : path.last.folderId;
+        final folders = await widget.apiClient.getMaterials(
+          cookie: widget.cookie.trim(),
+          folderId: folderId,
+          tagName: 'folder',
+          forceRefresh: true,
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        setDialogState(() {
+          loading = false;
+          hasLoaded = true;
+          childFolders = folders.where((item) => item.isFolder).toList();
+        });
+      } catch (error) {
+        setDialogState(() {
+          loading = false;
+          hasLoaded = true;
+          errorText = '加载目录失败：$error';
+        });
+      }
+    }
+
+    return showDialog<_MoveTargetFolderResult>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            if (!loading && !hasLoaded) {
+              loadFolders(setDialogState);
+            }
+
+            final currentFolderId = path.isEmpty ? '0' : path.last.folderId;
+            final currentFolderName = path.isEmpty ? '根目录' : path.last.name;
+            final canSubmit = !loading && !blocked.contains(currentFolderId);
+            final pathLabels = <String>['根目录', ...path.map((e) => e.name)];
+
+            return AlertDialog(
+              title: const Text('选择目标目录'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '当前目录：${pathLabels.join(' / ')}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: loading || path.isEmpty
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    path = path.sublist(0, path.length - 1);
+                                    hasLoaded = false;
+                                    childFolders = const [];
+                                  });
+                                },
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('上级'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: loading || path.isEmpty
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    path = const [];
+                                    hasLoaded = false;
+                                    childFolders = const [];
+                                  });
+                                },
+                          icon: const Icon(Icons.home_outlined),
+                          label: const Text('根目录'),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: loading
+                              ? null
+                              : () => loadFolders(setDialogState),
+                          tooltip: '刷新目录',
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
+                    ),
+                    if (errorText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        errorText!,
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(
+                              color: Theme.of(dialogContext).colorScheme.error,
+                            ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    if (loading)
+                      const SizedBox(
+                        height: 180,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (childFolders.isEmpty)
+                      const SizedBox(
+                        height: 120,
+                        child: Center(child: Text('此目录下暂无子文件夹。')),
+                      )
+                    else
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 220),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: childFolders.length,
+                            itemBuilder: (context, index) {
+                              final folder = childFolders[index];
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.folder_outlined),
+                                title: Text(folder.name),
+                                trailing:
+                                    const Icon(Icons.chevron_right_rounded),
+                                onTap: () {
+                                  setDialogState(() {
+                                    path = [
+                                      ...path,
+                                      _FolderEntry(
+                                        folderId: folder.folderId,
+                                        name: folder.name,
+                                      ),
+                                    ];
+                                    hasLoaded = false;
+                                    childFolders = const [];
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    if (!canSubmit) ...[
+                      const SizedBox(height: 8),
+                      const Text('不能将文件夹移动到自身目录。'),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: canSubmit
+                      ? () {
+                          Navigator.of(dialogContext).pop(
+                            _MoveTargetFolderResult(
+                              folderId: currentFolderId,
+                              name: currentFolderName,
+                            ),
+                          );
+                        }
+                      : null,
+                  child: const Text('移动到此处'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

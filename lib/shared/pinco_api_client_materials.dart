@@ -155,6 +155,48 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     _materialsCache.clear();
   }
 
+  Future<void> moveMaterials({
+    required String cookie,
+    required List<String> materialIds,
+    required String targetFolderId,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialIds = materialIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    final normalizedTargetFolderId = targetFolderId.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialIds.isEmpty) {
+      throw ArgumentError.value(
+        materialIds,
+        'materialIds',
+        'Material IDs cannot be empty.',
+      );
+    }
+    if (normalizedTargetFolderId.isEmpty) {
+      throw ArgumentError.value(
+        targetFolderId,
+        'targetFolderId',
+        'Target folder ID cannot be empty.',
+      );
+    }
+
+    await _postAction(
+      actionName: 'PutV1DriveMaterialsLocations',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'resIdList': normalizedMaterialIds,
+        'targetFolderId': normalizedTargetFolderId,
+      },
+    );
+
+    _materialsCache.clear();
+  }
+
   Future<String> createFolder({
     required String cookie,
     required String name,

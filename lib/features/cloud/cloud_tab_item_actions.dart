@@ -2,6 +2,7 @@ part of 'cloud_tab.dart';
 
 enum _ItemMenuAction {
   select,
+  move,
   rename,
   copyName,
   copyDownloadUrl,
@@ -27,6 +28,10 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
         const PopupMenuItem(
           value: _ItemMenuAction.rename,
           child: Text('重命名'),
+        ),
+        const PopupMenuItem(
+          value: _ItemMenuAction.move,
+          child: Text('移动到...'),
         ),
         const PopupMenuItem(
           value: _ItemMenuAction.copyName,
@@ -55,6 +60,9 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
         break;
       case _ItemMenuAction.rename:
         await _renameItem(item);
+        break;
+      case _ItemMenuAction.move:
+        await _moveItems([item]);
         break;
       case _ItemMenuAction.copyName:
         await _copyText(item.name, '已复制文件名');
@@ -254,6 +262,89 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('批量删除失败：$error')),
+      );
+    }
+  }
+
+  Future<void> _moveSelectedItems() async {
+    if (_selectedMaterialIds.isEmpty || _isLoading) {
+      return;
+    }
+
+    final selectedItems = _materials
+        .where((item) => _selectedMaterialIds.contains(item.id))
+        .toList(growable: false);
+    if (selectedItems.isEmpty) {
+      _exitSelectionMode();
+      return;
+    }
+
+    await _moveItems(selectedItems);
+  }
+
+  Future<void> _moveItems(List<DriveMaterial> items) async {
+    if (items.isEmpty || _isLoading) {
+      return;
+    }
+
+    final blockedFolderIds = items
+        .where((item) => item.isFolder)
+        .map((item) => item.folderId.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final target = await _showMoveTargetFolderDialog(
+      initialPath: _folderPath,
+      blockedFolderIds: blockedFolderIds,
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+
+    final sourceFolderId = _currentFolderId;
+    if (target.folderId == sourceFolderId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('目标目录与当前目录一致，无需移动。')),
+      );
+      return;
+    }
+
+    final materialIds = items
+        .map((item) => item.id)
+        .where((id) => id.trim().isNotEmpty)
+        .toList();
+    if (materialIds.isEmpty) {
+      return;
+    }
+
+    try {
+      await widget.apiClient.moveMaterials(
+        cookie: widget.cookie,
+        materialIds: materialIds,
+        targetFolderId: target.folderId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+
+      _selectedMaterialIds = <String>{};
+      _isSelectionMode = false;
+      final movedCount = materialIds.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已移动 $movedCount 项到「${target.name}」。'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('移动失败：$error')),
       );
     }
   }

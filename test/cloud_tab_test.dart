@@ -101,4 +101,132 @@ void main() {
     expect(deleteRequests, hasLength(1));
     expect(deleteRequests.first, ['m1', 'm2']);
   });
+
+  testWidgets('supports selecting multiple items and moving them in batch', (
+    WidgetTester tester,
+  ) async {
+    final moveRequests = <Map<String, dynamic>>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        final folderId = payload['folderId']?.toString() ?? '0';
+        final tagName = payload['tagName']?.toString() ?? '';
+
+        if (folderId == '0' && tagName == 'resource,folder') {
+          return http.Response(
+            jsonEncode({
+              'statusCode': 0,
+              'data': {
+                'list': [
+                  {
+                    'id': 'm1',
+                    'folderId': '0',
+                    'name': '语文课件.pdf',
+                    'type': 'resource',
+                    'size': 1234,
+                  },
+                  {
+                    'id': 'm2',
+                    'folderId': '0',
+                    'name': '数学课件.pdf',
+                    'type': 'resource',
+                    'size': 4567,
+                  },
+                ],
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        if (folderId == '0' && tagName == 'folder') {
+          return http.Response(
+            jsonEncode({
+              'statusCode': 0,
+              'data': {
+                'list': [
+                  {
+                    'id': 'f1',
+                    'folderId': 'f1',
+                    'name': '目标文件夹',
+                    'type': 'folder',
+                  },
+                ],
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        if (folderId == 'f1' && tagName == 'folder') {
+          return http.Response(
+            jsonEncode({
+              'statusCode': 0,
+              'data': {'list': []},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+      }
+
+      if (action == 'PutV1DriveMaterialsLocations') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        moveRequests.add(payload);
+        return http.Response(
+          jsonEncode({'statusCode': 0, 'data': true, 'message': 'ok'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('语文课件.pdf'), findsOneWidget);
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('多选'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('语文课件.pdf'));
+    await tester.pump();
+    await tester.tap(find.text('数学课件.pdf'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('移动所选'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择目标目录'), findsOneWidget);
+
+    await tester.tap(find.text('目标文件夹'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('移动到此处'));
+    await tester.pumpAndSettle();
+
+    expect(moveRequests, hasLength(1));
+    expect(moveRequests.first['resIdList'], ['m1', 'm2']);
+    expect(moveRequests.first['targetFolderId'], 'f1');
+  });
 }
