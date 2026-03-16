@@ -9,6 +9,7 @@ import '../transfer/upload_task_manager.dart';
 
 part 'cloud_tab_loading.dart';
 part 'cloud_tab_item_actions.dart';
+part 'cloud_tab_item_share.dart';
 part 'cloud_tab_dialogs_and_format.dart';
 part 'cloud_tab_selection.dart';
 

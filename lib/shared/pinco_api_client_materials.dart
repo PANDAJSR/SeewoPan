@@ -1,5 +1,17 @@
 part of 'pinco_api_client.dart';
 
+class DriveLinkShareResult {
+  const DriveLinkShareResult({
+    required this.shareId,
+    this.password,
+  });
+
+  final String shareId;
+  final String? password;
+
+  String get shareUrl => '${PincoApiClient._baseUrl}/s/$shareId';
+}
+
 extension PincoApiClientMaterialsExtension on PincoApiClient {
   Future<UserProfile> getUserInfo(
     String cookie, {
@@ -241,5 +253,65 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
 
     _materialsCache.clear();
     return folderId;
+  }
+
+  Future<DriveLinkShareResult> createDriveLinkShare({
+    required String cookie,
+    required String resId,
+    required int minutes,
+    required int shareType,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedResId = resId.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedResId.isEmpty) {
+      throw ArgumentError.value(resId, 'resId', 'Resource ID cannot be empty.');
+    }
+    if (minutes <= 0 && minutes != -1) {
+      throw ArgumentError.value(
+        minutes,
+        'minutes',
+        'Minutes must be positive or -1.',
+      );
+    }
+    if (shareType != 0 && shareType != 1) {
+      throw ArgumentError.value(
+        shareType,
+        'shareType',
+        'Share type must be 0 (public) or 1 (private).',
+      );
+    }
+
+    final data = await _postAction(
+      actionName: 'PostV1DriveLinkShare',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'resId': normalizedResId,
+        'minutes': minutes,
+        'shareType': shareType,
+      },
+    );
+
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Missing share data.');
+    }
+
+    final shareId = _pick(data, ['shareId', 'id'])?.toString().trim();
+    if (shareId == null || shareId.isEmpty) {
+      throw const FormatException('Missing share id.');
+    }
+
+    final passwordRaw = _pick(data, ['password', 'pwd'])?.toString();
+    final password = passwordRaw == null || passwordRaw.trim().isEmpty
+        ? null
+        : passwordRaw.trim();
+
+    return DriveLinkShareResult(
+      shareId: shareId,
+      password: password,
+    );
   }
 }

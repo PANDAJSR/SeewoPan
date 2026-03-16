@@ -2,6 +2,7 @@ part of 'cloud_tab.dart';
 
 enum _ItemMenuAction {
   select,
+  share,
   move,
   rename,
   copyName,
@@ -34,6 +35,10 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
           child: Text('移动到...'),
         ),
         const PopupMenuItem(
+          value: _ItemMenuAction.share,
+          child: Text('分享...'),
+        ),
+        const PopupMenuItem(
           value: _ItemMenuAction.copyName,
           child: Text('复制文件名'),
         ),
@@ -63,6 +68,9 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
         break;
       case _ItemMenuAction.move:
         await _moveItems([item]);
+        break;
+      case _ItemMenuAction.share:
+        await _shareItem(item);
         break;
       case _ItemMenuAction.copyName:
         await _copyText(item.name, '已复制文件名');

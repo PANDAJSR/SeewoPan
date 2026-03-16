@@ -274,4 +274,49 @@ void main() {
     await client.getMaterials(cookie: 'token=abc', folderId: '123');
     expect(listCallCount, 2);
   });
+
+  test('createDriveLinkShare should call share action and parse result',
+      () async {
+    final requests = <Map<String, dynamic>>[];
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'PostV1DriveLinkShare') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        requests.add(payload);
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'shareId': '372604f8a13e42ae8e3640f372abd64c',
+              'password': 'uj57',
+            },
+            'message': 'ok',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+    final result = await client.createDriveLinkShare(
+      cookie: 'token=abc',
+      resId: 'm1',
+      minutes: 30 * 24 * 60,
+      shareType: 1,
+    );
+
+    expect(requests, hasLength(1));
+    expect(requests.first['resId'], 'm1');
+    expect(requests.first['minutes'], 30 * 24 * 60);
+    expect(requests.first['shareType'], 1);
+    expect(result.shareId, '372604f8a13e42ae8e3640f372abd64c');
+    expect(result.password, 'uj57');
+    expect(
+      result.shareUrl,
+      'https://pinco.seewo.com/s/372604f8a13e42ae8e3640f372abd64c',
+    );
+  });
 }
