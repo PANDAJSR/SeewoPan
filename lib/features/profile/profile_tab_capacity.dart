@@ -209,40 +209,38 @@ class _StackedUsageBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    const flexBase = 10000;
+    final usedFlex = segments
+        .map((segment) => (segment.ratio * flexBase).round())
+        .fold<int>(0, (sum, value) => sum + value);
+    final remainingFlex = (flexBase - usedFlex).clamp(0, flexBase);
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: SizedBox(
         key: const Key('capacity_stacked_bar'),
         width: double.infinity,
         height: 12,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final children = <Widget>[
-              SizedBox(
-                width: constraints.maxWidth,
+        child: Row(
+          children: [
+            ...segments.map((segment) {
+              final flex = (segment.ratio * flexBase).round();
+              if (flex <= 0) {
+                return const SizedBox.shrink();
+              }
+              return Expanded(
+                flex: flex,
+                child: ColoredBox(color: segment.color),
+              );
+            }),
+            if (remainingFlex > 0)
+              Expanded(
+                flex: remainingFlex,
                 child: ColoredBox(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
               ),
-            ];
-            for (final segment in segments) {
-              final width = constraints.maxWidth * segment.ratio;
-              if (width <= 0) {
-                continue;
-              }
-              children.add(
-                SizedBox(
-                  width: width,
-                  child: ColoredBox(color: segment.color),
-                ),
-              );
-            }
-            final activeChildren = children.sublist(1);
-            if (activeChildren.isEmpty) {
-              return Row(children: [children.first]);
-            }
-            return Stack(children: [children.first, Row(children: activeChildren)]);
-          },
+          ],
         ),
       ),
     );
