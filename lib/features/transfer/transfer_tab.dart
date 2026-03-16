@@ -46,6 +46,7 @@ class TransferTab extends StatelessWidget {
                     onPause: () => taskManager.pauseTask(task.id),
                     onResume: () => taskManager.resumeTask(task.id),
                     onCancel: () => taskManager.cancelTask(task.id),
+                    onRetry: () => taskManager.retryTask(task.id),
                   ),
                 ),
             ],
@@ -62,12 +63,14 @@ class _TaskCard extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onCancel,
+    required this.onRetry,
   });
 
   final UploadTaskItem task;
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onCancel;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -98,9 +101,46 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  statusText,
-                  style: Theme.of(context).textTheme.bodySmall,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      statusText,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (task.status == UploadTaskStatus.queued ||
+                        task.status == UploadTaskStatus.uploading)
+                      IconButton(
+                        tooltip: '暂停',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onPause,
+                        icon: const Icon(Icons.pause_circle_outline),
+                      ),
+                    if (task.status == UploadTaskStatus.paused)
+                      IconButton(
+                        tooltip: '继续',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onResume,
+                        icon: const Icon(Icons.play_circle_outline),
+                      ),
+                    if (task.status == UploadTaskStatus.queued ||
+                        task.status == UploadTaskStatus.uploading ||
+                        task.status == UploadTaskStatus.paused)
+                      IconButton(
+                        tooltip: '取消',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onCancel,
+                        icon: const Icon(Icons.cancel_outlined),
+                      ),
+                    if (task.status == UploadTaskStatus.failed ||
+                        task.status == UploadTaskStatus.canceled)
+                      IconButton(
+                        tooltip: '重试',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onRetry,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -116,36 +156,6 @@ class _TaskCard extends StatelessWidget {
               '${_formatBytes(task.uploadedBytes)} / ${_formatBytes(task.totalBytes)} · ${_formatSpeed(task.speedBps)}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            if (task.status == UploadTaskStatus.queued ||
-                task.status == UploadTaskStatus.uploading ||
-                task.status == UploadTaskStatus.paused)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    if (task.status == UploadTaskStatus.queued ||
-                        task.status == UploadTaskStatus.uploading)
-                      OutlinedButton.icon(
-                        onPressed: onPause,
-                        icon: const Icon(Icons.pause_circle_outline),
-                        label: const Text('暂停'),
-                      ),
-                    if (task.status == UploadTaskStatus.paused)
-                      OutlinedButton.icon(
-                        onPressed: onResume,
-                        icon: const Icon(Icons.play_circle_outline),
-                        label: const Text('继续'),
-                      ),
-                    TextButton.icon(
-                      onPressed: onCancel,
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('取消'),
-                    ),
-                  ],
-                ),
-              ),
             if (task.errorMessage != null &&
                 task.errorMessage!.trim().isNotEmpty)
               Padding(

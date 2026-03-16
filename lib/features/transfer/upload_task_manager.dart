@@ -173,7 +173,6 @@ class UploadTaskManager extends ChangeNotifier {
         totalBytes: task.size,
         clearError: true,
       );
-      _sourceByTaskId.remove(taskId);
       notifyListeners();
       _cancelTokenByTaskId[taskId]?.cancel('Canceled by user');
       return;
@@ -187,7 +186,40 @@ class UploadTaskManager extends ChangeNotifier {
       totalBytes: task.size,
       clearError: true,
     );
-    _sourceByTaskId.remove(taskId);
+    notifyListeners();
+    unawaited(_runQueue());
+  }
+
+  void retryTask(String taskId) {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    final task = _tasks[index];
+    if (task.status != UploadTaskStatus.failed &&
+        task.status != UploadTaskStatus.canceled) {
+      return;
+    }
+
+    final source = _sourceByTaskId[taskId];
+    if (source == null || source.bytes.isEmpty) {
+      _tasks[index] = task.copyWith(
+        status: UploadTaskStatus.failed,
+        errorMessage: '文件数据已失效，请重新选择文件。',
+      );
+      notifyListeners();
+      return;
+    }
+
+    _tasks[index] = task.copyWith(
+      status: UploadTaskStatus.queued,
+      progress: 0,
+      speedBps: 0,
+      uploadedBytes: 0,
+      totalBytes: task.size,
+      clearError: true,
+    );
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -308,7 +340,6 @@ class UploadTaskManager extends ChangeNotifier {
               totalBytes: _tasks[index].size,
               clearError: true,
             );
-            _sourceByTaskId.remove(taskId);
           } else {
             _tasks[index] = _tasks[index].copyWith(
               status: UploadTaskStatus.paused,
@@ -323,7 +354,6 @@ class UploadTaskManager extends ChangeNotifier {
           status: UploadTaskStatus.failed,
           errorMessage: '$error',
         );
-        _sourceByTaskId.remove(taskId);
         notifyListeners();
       }
     } finally {

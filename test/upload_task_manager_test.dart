@@ -351,6 +351,129 @@ void main() {
     expect(task.progress, 0);
     expect(task.uploadedBytes, 0);
   });
+
+  test('supports retry for canceled task', () async {
+    var calls = 0;
+    final manager = UploadTaskManager(
+      apiClient: PincoApiClient(),
+      uploadFileHandler: ({
+        required String cookie,
+        required Uint8List bytes,
+        required String fileName,
+        String parentFolderId = '0',
+        String? mimeType,
+        CancelToken? cancelToken,
+        UploadProgressCallback? onProgress,
+      }) async {
+        calls += 1;
+        if (calls == 1) {
+          await (cancelToken?.whenCancel ?? Future<void>.value());
+          throw DioException.requestCancelled(
+            requestOptions: RequestOptions(path: '/mock-upload'),
+            reason: 'Canceled by test',
+          );
+        }
+        return UploadFileResult(
+          deduplicated: false,
+          name: fileName,
+          size: bytes.length,
+          mimeType: 'application/octet-stream',
+          fileMd5: 'md5',
+          fileKey: 'file-key',
+          downloadUrl: 'https://example.com/$fileName',
+          metrics: const UploadMetrics(
+            fileSizeBytes: 1024,
+            totalElapsed: Duration(seconds: 1),
+            uploadElapsed: Duration(seconds: 1),
+            uploadSpeedBps: 1024,
+          ),
+        );
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    await manager.enqueueFiles([
+      UploadSourceFile(
+        name: 'retry-canceled.bin',
+        bytes: Uint8List.fromList(List<int>.filled(1024, 1)),
+        parentFolderId: '0',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      return manager.tasks.isNotEmpty &&
+          manager.tasks.first.status == UploadTaskStatus.uploading;
+    });
+    final taskId = manager.tasks.first.id;
+
+    manager.cancelTask(taskId);
+    await _waitUntil(() {
+      return manager.tasks.first.status == UploadTaskStatus.canceled;
+    });
+
+    manager.retryTask(taskId);
+    await _waitUntil(() {
+      return manager.tasks.first.status == UploadTaskStatus.success;
+    });
+    expect(calls, 2);
+  });
+
+  test('supports retry for failed task', () async {
+    var calls = 0;
+    final manager = UploadTaskManager(
+      apiClient: PincoApiClient(),
+      uploadFileHandler: ({
+        required String cookie,
+        required Uint8List bytes,
+        required String fileName,
+        String parentFolderId = '0',
+        String? mimeType,
+        CancelToken? cancelToken,
+        UploadProgressCallback? onProgress,
+      }) async {
+        calls += 1;
+        if (calls == 1) {
+          throw Exception('mock failed');
+        }
+        return UploadFileResult(
+          deduplicated: false,
+          name: fileName,
+          size: bytes.length,
+          mimeType: 'application/octet-stream',
+          fileMd5: 'md5',
+          fileKey: 'file-key',
+          downloadUrl: 'https://example.com/$fileName',
+          metrics: const UploadMetrics(
+            fileSizeBytes: 1024,
+            totalElapsed: Duration(seconds: 1),
+            uploadElapsed: Duration(seconds: 1),
+            uploadSpeedBps: 1024,
+          ),
+        );
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    await manager.enqueueFiles([
+      UploadSourceFile(
+        name: 'retry-failed.bin',
+        bytes: Uint8List.fromList(List<int>.filled(1024, 1)),
+        parentFolderId: '0',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      return manager.tasks.isNotEmpty &&
+          manager.tasks.first.status == UploadTaskStatus.failed;
+    });
+    final taskId = manager.tasks.first.id;
+
+    manager.retryTask(taskId);
+    await _waitUntil(() {
+      return manager.tasks.first.status == UploadTaskStatus.success;
+    });
+    expect(calls, 2);
+  });
 }
 
 Future<void> _waitUntil(
