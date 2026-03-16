@@ -213,15 +213,20 @@ class _StackedUsageBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: SizedBox(
         key: const Key('capacity_stacked_bar'),
+        width: double.infinity,
         height: 12,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final children = <Widget>[];
-            var usedRatio = 0.0;
-
+            final children = <Widget>[
+              SizedBox(
+                width: constraints.maxWidth,
+                child: ColoredBox(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+              ),
+            ];
             for (final segment in segments) {
               final width = constraints.maxWidth * segment.ratio;
-              usedRatio += segment.ratio;
               if (width <= 0) {
                 continue;
               }
@@ -232,21 +237,11 @@ class _StackedUsageBar extends StatelessWidget {
                 ),
               );
             }
-
-            final remainingRatio = (1 - usedRatio).clamp(0.0, 1.0).toDouble();
-            if (remainingRatio > 0) {
-              children.add(
-                SizedBox(
-                  width: constraints.maxWidth * remainingRatio,
-                  child: ColoredBox(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ),
-                ),
-              );
+            final activeChildren = children.sublist(1);
+            if (activeChildren.isEmpty) {
+              return Row(children: [children.first]);
             }
-
-            return Row(children: children);
+            return Stack(children: [children.first, Row(children: activeChildren)]);
           },
         ),
       ),
