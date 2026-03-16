@@ -427,12 +427,19 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), '数学');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     expect(find.text('数学课件.pdf'), findsOneWidget);
     expect(find.text('语文课件.pdf'), findsNothing);
     expect(requestedKeywords, containsAllInOrder(<String>['', '数学']));
+
+    await tester.tap(find.byTooltip('收起搜索'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('语文课件.pdf'), findsOneWidget);
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+    expect(requestedKeywords, containsAllInOrder(<String>['', '数学', '']));
   });
 
   testWidgets('supports sorting materials by name, size and update time', (

@@ -40,11 +40,14 @@ class CloudTab extends StatefulWidget {
 }
 
 class _CloudTabState extends State<CloudTab> {
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 400);
+
   bool _isLoading = false;
   String? _error;
   List<DriveMaterial> _materials = const [];
   List<_FolderEntry> _folderPath = const [];
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounceTimer;
   String _searchKeyword = '';
   bool _isSearchBarVisible = false;
   bool _isSelectionMode = false;
@@ -67,6 +70,7 @@ class _CloudTabState extends State<CloudTab> {
       _folderPath = const [];
       _searchKeyword = '';
       _searchController.clear();
+      _searchDebounceTimer?.cancel();
       _isSearchBarVisible = false;
       _isSelectionMode = false;
       _selectedMaterialIds = <String>{};
@@ -76,8 +80,36 @@ class _CloudTabState extends State<CloudTab> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {});
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(_searchDebounceDuration, () {
+      if (!mounted || !_isSearchBarVisible || _isLoading) {
+        return;
+      }
+      unawaited(_applySearch());
+    });
+  }
+
+  Future<void> _toggleSearchBar() async {
+    _searchDebounceTimer?.cancel();
+
+    if (_isSearchBarVisible) {
+      setState(() {
+        _isSearchBarVisible = false;
+      });
+      await _clearSearch();
+      return;
+    }
+
+    setState(() {
+      _isSearchBarVisible = true;
+    });
   }
 
   Future<void> _applySearch() async {
@@ -223,11 +255,7 @@ class _CloudTabState extends State<CloudTab> {
                         ),
                       ],
                       IconButton(
-                        onPressed: () {
-                          setState(() {
-                            _isSearchBarVisible = !_isSearchBarVisible;
-                          });
-                        },
+                        onPressed: _toggleSearchBar,
                         icon: Icon(
                           _isSearchBarVisible
                               ? Icons.search_off_rounded
@@ -275,7 +303,7 @@ class _CloudTabState extends State<CloudTab> {
                             controller: _searchController,
                             textInputAction: TextInputAction.search,
                             enabled: !_isLoading,
-                            onChanged: (_) => setState(() {}),
+                            onChanged: (_) => _onSearchChanged(),
                             onSubmitted: (_) => _applySearch(),
                             decoration: InputDecoration(
                               hintText: '搜索当前目录文件',
