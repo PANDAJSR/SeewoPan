@@ -229,4 +229,116 @@ void main() {
     expect(moveRequests.first['resIdList'], ['m1', 'm2']);
     expect(moveRequests.first['targetFolderId'], 'f1');
   });
+
+  testWidgets('supports creating a folder from selected items', (
+    WidgetTester tester,
+  ) async {
+    final createFolderRequests = <Map<String, dynamic>>[];
+    final moveRequests = <Map<String, dynamic>>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': '语文课件.pdf',
+                  'type': 'resource',
+                  'size': 1234,
+                },
+                {
+                  'id': 'm2',
+                  'folderId': '0',
+                  'name': '数学课件.pdf',
+                  'type': 'resource',
+                  'size': 4567,
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'PostV1DriveMaterialsFolders') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        createFolderRequests.add(payload);
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'id': 'f-new',
+              'folderId': 'f-new',
+              'name': payload['name'] ?? '',
+            },
+            'message': 'ok',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'PutV1DriveMaterialsLocations') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        moveRequests.add(payload);
+        return http.Response(
+          jsonEncode({'statusCode': 0, 'data': true, 'message': 'ok'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('语文课件.pdf'), findsOneWidget);
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('多选'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('语文课件.pdf'));
+    await tester.pump();
+    await tester.tap(find.text('数学课件.pdf'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('用所选项目新建文件夹'));
+    await tester.pumpAndSettle();
+    expect(find.text('新建文件夹'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), '课堂资料');
+    await tester.tap(find.text('创建'));
+    await tester.pumpAndSettle();
+
+    expect(createFolderRequests, hasLength(1));
+    expect(createFolderRequests.first['name'], '课堂资料');
+    expect(createFolderRequests.first['parentFolderId'], '0');
+
+    expect(moveRequests, hasLength(1));
+    expect(moveRequests.first['resIdList'], ['m1', 'm2']);
+    expect(moveRequests.first['targetFolderId'], 'f-new');
+  });
 }

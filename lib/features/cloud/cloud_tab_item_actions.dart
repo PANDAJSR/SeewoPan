@@ -282,6 +282,77 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
     await _moveItems(selectedItems);
   }
 
+  Future<void> _createFolderWithSelectedItems() async {
+    if (_selectedMaterialIds.isEmpty || _isLoading) {
+      return;
+    }
+
+    final selectedItems = _materials
+        .where((item) => _selectedMaterialIds.contains(item.id))
+        .toList(growable: false);
+    if (selectedItems.isEmpty) {
+      _exitSelectionMode();
+      return;
+    }
+
+    final folderName = await _showCreateFolderDialog();
+    if (folderName == null || !mounted) {
+      return;
+    }
+
+    final normalizedName = folderName.trim();
+    if (normalizedName.isEmpty) {
+      return;
+    }
+
+    final materialIds = selectedItems
+        .map((item) => item.id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (materialIds.isEmpty) {
+      return;
+    }
+
+    try {
+      final newFolderId = await widget.apiClient.createFolder(
+        cookie: widget.cookie,
+        name: normalizedName,
+        parentFolderId: _currentFolderId,
+      );
+
+      await widget.apiClient.moveMaterials(
+        cookie: widget.cookie,
+        materialIds: materialIds,
+        targetFolderId: newFolderId,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+
+      _selectedMaterialIds = <String>{};
+      _isSelectionMode = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '已新建文件夹「$normalizedName」，并移动 ${materialIds.length} 项。',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('用所选项目新建文件夹失败：$error')),
+      );
+    }
+  }
+
   Future<void> _moveItems(List<DriveMaterial> items) async {
     if (items.isEmpty || _isLoading) {
       return;

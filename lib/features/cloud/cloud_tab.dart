@@ -95,6 +95,13 @@ class _CloudTabState extends State<CloudTab> {
                       IconButton(
                         onPressed: _isLoading || _selectedCount == 0
                             ? null
+                            : _createFolderWithSelectedItems,
+                        icon: const Icon(Icons.create_new_folder_outlined),
+                        tooltip: '用所选项目新建文件夹',
+                      ),
+                      IconButton(
+                        onPressed: _isLoading || _selectedCount == 0
+                            ? null
                             : _moveSelectedItems,
                         icon: const Icon(Icons.drive_file_move_outline),
                         tooltip: '移动所选',
