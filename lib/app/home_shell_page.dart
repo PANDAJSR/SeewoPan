@@ -69,6 +69,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+    final content = _buildContent();
 
     if (isLandscape) {
       return Scaffold(
@@ -89,14 +90,14 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   .toList(),
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: _buildContent()),
+            Expanded(child: content),
           ],
         ),
       );
     }
 
     return Scaffold(
-      body: _buildContent(),
+      body: content,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onSelect,
@@ -120,35 +121,32 @@ class _HomeShellPageState extends State<HomeShellPage> {
   }
 
   Widget _buildContent() {
-    switch (_selectedIndex) {
-      case 0:
-        return CloudTab(
+    return IndexedStack(
+      index: _selectedIndex,
+      children: [
+        CloudTab(
           cookie: _cookie,
           isLoadingCookie: _isLoadingCookie,
           apiClient: _apiClient,
           onUploadFiles: _uploadTaskManager.enqueueFiles,
           onOpenTransferTab: () => _onSelect(1),
-        );
-      case 1:
-        return TransferTab(taskManager: _uploadTaskManager);
-      case 2:
-        return ProfileTab(
+        ),
+        TransferTab(taskManager: _uploadTaskManager),
+        ProfileTab(
           initialCookie: _cookie,
           isLoadingCookie: _isLoadingCookie,
           isSavingCookie: _isSavingCookie,
           onSaveCookie: _saveCookie,
           apiClient: _apiClient,
-        );
-      case 3:
-        return SettingsTab(
+        ),
+        SettingsTab(
           themeMode: widget.themeMode,
           onThemeModeChanged: widget.onThemeModeChanged,
           maxConcurrentUploads: _maxConcurrentUploads,
           onMaxConcurrentUploadsChanged: _saveMaxConcurrentUploads,
-        );
-      default:
-        return const SizedBox.shrink();
-    }
+        ),
+      ],
+    );
   }
 
   Future<void> _loadLocalSettings() async {
