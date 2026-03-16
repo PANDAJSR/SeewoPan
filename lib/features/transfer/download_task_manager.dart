@@ -3,55 +3,57 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../../shared/pinco_api_client.dart';
+import '../../shared/models/drive_material.dart';
 import 'upload_task_models.dart';
 
-export 'upload_task_models.dart';
-
-typedef UploadFileHandler = Future<UploadFileResult> Function({
+typedef DownloadFileHandler = Future<void> Function({
   required String cookie,
-  required Uint8List bytes,
-  required String fileName,
-  String parentFolderId,
-  String? mimeType,
+  required String materialId,
+  required String savePath,
   CancelToken? cancelToken,
-  UploadProgressCallback? onProgress,
+  ProgressCallback? onReceiveProgress,
 });
 
-enum _TaskStopAction {
+enum _DownloadTaskStopAction {
   paused,
   canceled,
 }
 
-class UploadTaskManager extends ChangeNotifier {
-  UploadTaskManager({
+class DownloadTaskManager extends ChangeNotifier {
+  DownloadTaskManager({
     required PincoApiClient apiClient,
-    UploadFileHandler? uploadFileHandler,
-  }) : _uploadFileHandler = uploadFileHandler ?? apiClient.uploadFileBytes;
-  final UploadFileHandler _uploadFileHandler;
+    DownloadFileHandler? downloadFileHandler,
+  }) : _downloadFileHandler =
+            downloadFileHandler ?? apiClient.downloadMaterialToFile;
+
+  final DownloadFileHandler _downloadFileHandler;
   final List<UploadTaskItem> _tasks = <UploadTaskItem>[];
-  final Map<String, UploadSourceFile> _sourceByTaskId =
-      <String, UploadSourceFile>{};
+  final Map<String, DriveMaterial> _sourceByTaskId = <String, DriveMaterial>{};
   final Map<String, CancelToken> _cancelTokenByTaskId = <String, CancelToken>{};
-  final Map<String, _TaskStopAction> _stopActionByTaskId =
-      <String, _TaskStopAction>{};
+  final Map<String, _DownloadTaskStopAction> _stopActionByTaskId =
+      <String, _DownloadTaskStopAction>{};
   final Random _random = Random();
 
   String _cookie = '';
+  String _downloadDirectory = '';
   bool _isDispatching = false;
-  int _runningUploads = 0;
-  int _maxConcurrentUploads = 3;
+  int _runningDownloads = 0;
+  int _maxConcurrentDownloads = 3;
 
   List<UploadTaskItem> get tasks => List<UploadTaskItem>.unmodifiable(_tasks);
-  int get maxConcurrentUploads => _maxConcurrentUploads;
+  int get maxConcurrentDownloads => _maxConcurrentDownloads;
+  String get downloadDirectory => _downloadDirectory;
 
   List<UploadTaskItem> get activeTasks => _tasks
       .where((task) =>
           task.status == UploadTaskStatus.queued ||
           task.status == UploadTaskStatus.uploading)
       .toList(growable: false);
-  double get totalUploadingSpeedBps => _tasks
+
+  double get totalDownloadingSpeedBps => _tasks
       .where((task) => task.status == UploadTaskStatus.uploading)
       .fold(0.0, (sum, task) => sum + task.speedBps);
 
@@ -59,43 +61,46 @@ class UploadTaskManager extends ChangeNotifier {
     _cookie = value.trim();
   }
 
-  void updateMaxConcurrentUploads(int value) {
+  void updateDownloadDirectory(String value) {
+    _downloadDirectory = value.trim();
+  }
+
+  void updateMaxConcurrentDownloads(int value) {
     final normalized = value.clamp(1, 10);
-    if (normalized == _maxConcurrentUploads) {
+    if (normalized == _maxConcurrentDownloads) {
       return;
     }
-    _maxConcurrentUploads = normalized;
+    _maxConcurrentDownloads = normalized;
     notifyListeners();
     unawaited(_runQueue());
   }
 
-  Future<void> enqueueFiles(List<UploadSourceFile> files) async {
-    if (files.isEmpty) {
+  Future<void> enqueueMaterials(List<DriveMaterial> materials) async {
+    if (materials.isEmpty) {
       return;
     }
 
     final now = DateTime.now();
-    final added = files.map((file) {
+    final added = materials.map((material) {
       final taskId = _createTaskId(now);
-      _sourceByTaskId[taskId] = file;
+      _sourceByTaskId[taskId] = material;
       return UploadTaskItem(
         id: taskId,
-        taskType: TransferTaskType.upload,
-        name: file.name,
-        size: file.bytes.length,
-        parentFolderId: file.parentFolderId,
+        taskType: TransferTaskType.download,
+        name: material.name,
+        size: material.size,
+        parentFolderId: material.folderId,
         status: UploadTaskStatus.queued,
         createdAt: now,
         progress: 0,
         speedBps: 0,
         uploadedBytes: 0,
-        totalBytes: file.bytes.length,
+        totalBytes: max(material.size, 0),
       );
     }).toList(growable: false);
 
     _tasks.addAll(added);
     notifyListeners();
-
     unawaited(_runQueue());
   }
 
@@ -119,7 +124,7 @@ class UploadTaskManager extends ChangeNotifier {
       return;
     }
 
-    _stopActionByTaskId[taskId] = _TaskStopAction.paused;
+    _stopActionByTaskId[taskId] = _DownloadTaskStopAction.paused;
     _tasks[index] = task.copyWith(
       status: UploadTaskStatus.paused,
       speedBps: 0,
@@ -144,7 +149,7 @@ class UploadTaskManager extends ChangeNotifier {
       progress: 0,
       speedBps: 0,
       uploadedBytes: 0,
-      totalBytes: task.size,
+      totalBytes: max(task.size, 0),
       clearError: true,
     );
     notifyListeners();
@@ -165,13 +170,13 @@ class UploadTaskManager extends ChangeNotifier {
     }
 
     if (task.status == UploadTaskStatus.uploading) {
-      _stopActionByTaskId[taskId] = _TaskStopAction.canceled;
+      _stopActionByTaskId[taskId] = _DownloadTaskStopAction.canceled;
       _tasks[index] = task.copyWith(
         status: UploadTaskStatus.canceled,
         progress: 0,
         speedBps: 0,
         uploadedBytes: 0,
-        totalBytes: task.size,
+        totalBytes: max(task.size, 0),
         clearError: true,
       );
       notifyListeners();
@@ -184,7 +189,7 @@ class UploadTaskManager extends ChangeNotifier {
       progress: 0,
       speedBps: 0,
       uploadedBytes: 0,
-      totalBytes: task.size,
+      totalBytes: max(task.size, 0),
       clearError: true,
     );
     notifyListeners();
@@ -204,10 +209,10 @@ class UploadTaskManager extends ChangeNotifier {
     }
 
     final source = _sourceByTaskId[taskId];
-    if (source == null || source.bytes.isEmpty) {
+    if (source == null) {
       _tasks[index] = task.copyWith(
         status: UploadTaskStatus.failed,
-        errorMessage: '文件数据已失效，请重新选择文件。',
+        errorMessage: '文件信息已失效，请重新选择下载。',
       );
       notifyListeners();
       return;
@@ -218,7 +223,7 @@ class UploadTaskManager extends ChangeNotifier {
       progress: 0,
       speedBps: 0,
       uploadedBytes: 0,
-      totalBytes: task.size,
+      totalBytes: max(task.size, 0),
       clearError: true,
     );
     notifyListeners();
@@ -232,7 +237,7 @@ class UploadTaskManager extends ChangeNotifier {
     _isDispatching = true;
 
     try {
-      while (_runningUploads < _maxConcurrentUploads) {
+      while (_runningDownloads < _maxConcurrentDownloads) {
         final index = _tasks.indexWhere(
           (task) => task.status == UploadTaskStatus.queued,
         );
@@ -242,12 +247,11 @@ class UploadTaskManager extends ChangeNotifier {
 
         final task = _tasks[index];
         final source = _sourceByTaskId[task.id];
-        if (source == null || source.bytes.isEmpty) {
+        if (source == null) {
           _tasks[index] = task.copyWith(
             status: UploadTaskStatus.failed,
-            errorMessage: '文件数据已失效，请重新选择文件。',
+            errorMessage: '文件信息已失效，请重新选择下载。',
           );
-          _sourceByTaskId.remove(task.id);
           notifyListeners();
           continue;
         }
@@ -261,34 +265,44 @@ class UploadTaskManager extends ChangeNotifier {
           continue;
         }
 
+        if (_downloadDirectory.isEmpty) {
+          _tasks[index] = task.copyWith(
+            status: UploadTaskStatus.failed,
+            errorMessage: '未设置下载目录，请先到“设置”配置。',
+          );
+          notifyListeners();
+          continue;
+        }
+
         _tasks[index] = task.copyWith(
           status: UploadTaskStatus.uploading,
           clearError: true,
         );
-        _runningUploads += 1;
+        _runningDownloads += 1;
         notifyListeners();
-        unawaited(_startUpload(taskId: task.id, source: source));
+        unawaited(_startDownload(taskId: task.id, source: source));
       }
     } finally {
       _isDispatching = false;
     }
   }
 
-  Future<void> _startUpload({
+  Future<void> _startDownload({
     required String taskId,
-    required UploadSourceFile source,
+    required DriveMaterial source,
   }) async {
     final cancelToken = CancelToken();
     _cancelTokenByTaskId[taskId] = cancelToken;
+    final startedAt = DateTime.now();
 
     try {
-      final result = await _uploadFileHandler(
+      final savePath = _buildSavePath(source.name);
+      await _downloadFileHandler(
         cookie: _cookie,
-        bytes: source.bytes,
-        fileName: source.name,
-        parentFolderId: source.parentFolderId,
+        materialId: source.id,
+        savePath: savePath,
         cancelToken: cancelToken,
-        onProgress: (progress) {
+        onReceiveProgress: (received, total) {
           final index = _tasks.indexWhere((item) => item.id == taskId);
           if (index < 0) {
             return;
@@ -296,12 +310,20 @@ class UploadTaskManager extends ChangeNotifier {
           if (_tasks[index].status != UploadTaskStatus.uploading) {
             return;
           }
+
+          final elapsedMs =
+              max(1, DateTime.now().difference(startedAt).inMilliseconds);
+          final totalBytes = total > 0 ? total : max(_tasks[index].size, 0);
+          final progress =
+              totalBytes <= 0 ? 0.0 : (received / totalBytes).clamp(0.0, 0.99);
+          final speedBps = received * 1000 / elapsedMs;
+
           _tasks[index] = _tasks[index].copyWith(
             status: UploadTaskStatus.uploading,
-            progress: progress.progress.clamp(0.0, 0.99),
-            speedBps: progress.speedBps,
-            uploadedBytes: progress.sentBytes,
-            totalBytes: progress.totalBytes,
+            progress: progress,
+            speedBps: speedBps,
+            uploadedBytes: max(received, 0),
+            totalBytes: max(totalBytes, 0),
           );
           notifyListeners();
         },
@@ -313,16 +335,16 @@ class UploadTaskManager extends ChangeNotifier {
             _tasks[index].status == UploadTaskStatus.canceled) {
           return;
         }
+
+        final totalBytes = max(_tasks[index].totalBytes, _tasks[index].size);
         _tasks[index] = _tasks[index].copyWith(
           status: UploadTaskStatus.success,
           progress: 1,
-          speedBps: result.metrics.uploadSpeedBps,
-          uploadedBytes: result.size,
-          totalBytes: result.size,
-          downloadUrl: result.downloadUrl,
+          uploadedBytes: totalBytes,
+          totalBytes: totalBytes,
           errorMessage: null,
+          localPath: savePath,
         );
-        _sourceByTaskId.remove(taskId);
         notifyListeners();
       }
     } catch (error) {
@@ -332,13 +354,13 @@ class UploadTaskManager extends ChangeNotifier {
         if (error is DioException &&
             CancelToken.isCancel(error) &&
             stopAction != null) {
-          if (stopAction == _TaskStopAction.canceled) {
+          if (stopAction == _DownloadTaskStopAction.canceled) {
             _tasks[index] = _tasks[index].copyWith(
               status: UploadTaskStatus.canceled,
               progress: 0,
               speedBps: 0,
               uploadedBytes: 0,
-              totalBytes: _tasks[index].size,
+              totalBytes: max(_tasks[index].size, 0),
               clearError: true,
             );
           } else {
@@ -351,6 +373,7 @@ class UploadTaskManager extends ChangeNotifier {
           notifyListeners();
           return;
         }
+
         _tasks[index] = _tasks[index].copyWith(
           status: UploadTaskStatus.failed,
           errorMessage: '$error',
@@ -360,9 +383,24 @@ class UploadTaskManager extends ChangeNotifier {
     } finally {
       _cancelTokenByTaskId.remove(taskId);
       _stopActionByTaskId.remove(taskId);
-      _runningUploads = max(0, _runningUploads - 1);
+      _runningDownloads = max(0, _runningDownloads - 1);
       unawaited(_runQueue());
     }
+  }
+
+  String _buildSavePath(String fileName) {
+    final normalizedName = fileName.trim().isEmpty ? 'unnamed' : fileName;
+    final safeName = normalizedName
+        .replaceAll('\\', '_')
+        .replaceAll('/', '_')
+        .replaceAll(':', '_')
+        .replaceAll('*', '_')
+        .replaceAll('?', '_')
+        .replaceAll('"', '_')
+        .replaceAll('<', '_')
+        .replaceAll('>', '_')
+        .replaceAll('|', '_');
+    return p.join(_downloadDirectory, safeName);
   }
 
   String _createTaskId(DateTime now) {

@@ -132,6 +132,50 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
         '?resId=${Uri.encodeQueryComponent(materialId)}';
   }
 
+  Future<void> downloadMaterialToFile({
+    required String cookie,
+    required String materialId,
+    required String savePath,
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialId = materialId.trim();
+    final normalizedSavePath = savePath.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialId.isEmpty) {
+      throw ArgumentError.value(
+        materialId,
+        'materialId',
+        'Material ID cannot be empty.',
+      );
+    }
+    if (normalizedSavePath.isEmpty) {
+      throw ArgumentError.value(
+        savePath,
+        'savePath',
+        'Save path cannot be empty.',
+      );
+    }
+
+    await _dioClient.download(
+      buildMaterialDownloadUrl(normalizedMaterialId),
+      normalizedSavePath,
+      cancelToken: cancelToken,
+      onReceiveProgress: onReceiveProgress,
+      options: Options(
+        headers: <String, dynamic>{
+          'cookie': normalizedCookie,
+          'origin': PincoApiClient._origin,
+          'referer': PincoApiClient._referer,
+        },
+      ),
+    );
+  }
+
   Future<void> renameMaterial({
     required String cookie,
     required String materialId,

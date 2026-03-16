@@ -2,6 +2,7 @@ part of 'cloud_tab.dart';
 
 enum _ItemMenuAction {
   select,
+  download,
   share,
   move,
   rename,
@@ -34,6 +35,11 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
           value: _ItemMenuAction.move,
           child: Text('移动到...'),
         ),
+        if (!item.isFolder)
+          const PopupMenuItem(
+            value: _ItemMenuAction.download,
+            child: Text('下载'),
+          ),
         const PopupMenuItem(
           value: _ItemMenuAction.share,
           child: Text('分享...'),
@@ -69,6 +75,9 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       case _ItemMenuAction.move:
         await _moveItems([item]);
         break;
+      case _ItemMenuAction.download:
+        await _downloadItems([item]);
+        break;
       case _ItemMenuAction.share:
         await _shareItem(item);
         break;
@@ -89,6 +98,49 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
         await _deleteItem(item);
         break;
     }
+  }
+
+  Future<void> _downloadSelectedItems() async {
+    if (_selectedMaterialIds.isEmpty || _isLoading) {
+      return;
+    }
+
+    final selectedItems = _materials
+        .where((item) => _selectedMaterialIds.contains(item.id))
+        .toList(growable: false);
+    if (selectedItems.isEmpty) {
+      _exitSelectionMode();
+      return;
+    }
+    await _downloadItems(selectedItems);
+  }
+
+  Future<void> _downloadItems(List<DriveMaterial> items) async {
+    if (items.isEmpty || !mounted) {
+      return;
+    }
+
+    final files = items.where((item) => !item.isFolder).toList(growable: false);
+    final skippedCount = items.length - files.length;
+    if (files.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文件夹暂不支持直接下载，请先进入文件夹选择文件。')),
+      );
+      return;
+    }
+
+    await widget.onDownloadMaterials(files);
+    if (!mounted) {
+      return;
+    }
+
+    final message = skippedCount > 0
+        ? '已添加 ${files.length} 个下载任务，已跳过 $skippedCount 个文件夹。'
+        : '已添加 ${files.length} 个下载任务。';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+    widget.onOpenTransferTab();
   }
 
   String? _buildDownloadUrl(DriveMaterial item) {

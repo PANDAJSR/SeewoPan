@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/cloud/cloud_tab.dart';
 import '../features/profile/profile_tab.dart';
 import '../features/settings/settings_tab.dart';
+import '../features/transfer/download_task_manager.dart';
 import '../features/transfer/transfer_tab.dart';
 import '../features/transfer/upload_task_manager.dart';
+import '../shared/default_download_directory.dart';
 import '../shared/pinco_api_client.dart';
 
 class HomeShellPage extends StatefulWidget {
@@ -26,6 +29,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   static const _cookieStorageKey = 'seewopan.cookie';
   static const _maxConcurrentUploadsStorageKey =
       'seewopan.max_concurrent_uploads';
+  static const _maxConcurrentDownloadsStorageKey =
+      'seewopan.max_concurrent_downloads';
+  static const _downloadDirectoryStorageKey = 'seewopan.download_directory';
   static const List<_NavItem> _items = [
     _NavItem(
         label: '云盘', icon: Icons.cloud_outlined, selectedIcon: Icons.cloud),
@@ -46,12 +52,16 @@ class _HomeShellPageState extends State<HomeShellPage> {
   final PincoApiClient _apiClient = PincoApiClient();
   late final UploadTaskManager _uploadTaskManager =
       UploadTaskManager(apiClient: _apiClient);
+  late final DownloadTaskManager _downloadTaskManager =
+      DownloadTaskManager(apiClient: _apiClient);
 
   int _selectedIndex = 0;
   bool _isLoadingCookie = true;
   bool _isSavingCookie = false;
   String _cookie = '';
   int _maxConcurrentUploads = 3;
+  int _maxConcurrentDownloads = 3;
+  String _downloadDirectory = '';
 
   @override
   void initState() {
@@ -62,6 +72,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   @override
   void dispose() {
     _uploadTaskManager.dispose();
+    _downloadTaskManager.dispose();
     super.dispose();
   }
 
@@ -129,9 +140,13 @@ class _HomeShellPageState extends State<HomeShellPage> {
           isLoadingCookie: _isLoadingCookie,
           apiClient: _apiClient,
           onUploadFiles: _uploadTaskManager.enqueueFiles,
+          onDownloadMaterials: _downloadTaskManager.enqueueMaterials,
           onOpenTransferTab: () => _onSelect(1),
         ),
-        TransferTab(taskManager: _uploadTaskManager),
+        TransferTab(
+          uploadTaskManager: _uploadTaskManager,
+          downloadTaskManager: _downloadTaskManager,
+        ),
         ProfileTab(
           initialCookie: _cookie,
           isLoadingCookie: _isLoadingCookie,
@@ -144,6 +159,11 @@ class _HomeShellPageState extends State<HomeShellPage> {
           onThemeModeChanged: widget.onThemeModeChanged,
           maxConcurrentUploads: _maxConcurrentUploads,
           onMaxConcurrentUploadsChanged: _saveMaxConcurrentUploads,
+          maxConcurrentDownloads: _maxConcurrentDownloads,
+          onMaxConcurrentDownloadsChanged: _saveMaxConcurrentDownloads,
+          downloadDirectory: _downloadDirectory,
+          onSelectDownloadDirectory: _selectDownloadDirectory,
+          onResetDownloadDirectory: _resetDownloadDirectory,
         ),
       ],
     );
@@ -153,7 +173,17 @@ class _HomeShellPageState extends State<HomeShellPage> {
     final prefs = await SharedPreferences.getInstance();
     final cookie = prefs.getString(_cookieStorageKey) ?? '';
     final maxConcurrentUploads = prefs.getInt(_maxConcurrentUploadsStorageKey);
+    final maxConcurrentDownloads =
+        prefs.getInt(_maxConcurrentDownloadsStorageKey);
+    final storedDownloadDirectory =
+        prefs.getString(_downloadDirectoryStorageKey)?.trim() ?? '';
+    final defaultDownloadDirectory =
+        await resolveDefaultDownloadDirectoryPath();
+    final normalizedDownloadDirectory = storedDownloadDirectory.isNotEmpty
+        ? storedDownloadDirectory
+        : defaultDownloadDirectory;
     final normalizedUploads = (maxConcurrentUploads ?? 3).clamp(1, 10);
+    final normalizedDownloads = (maxConcurrentDownloads ?? 3).clamp(1, 10);
 
     if (!mounted) {
       return;
@@ -162,10 +192,15 @@ class _HomeShellPageState extends State<HomeShellPage> {
     setState(() {
       _cookie = cookie;
       _maxConcurrentUploads = normalizedUploads;
+      _maxConcurrentDownloads = normalizedDownloads;
+      _downloadDirectory = normalizedDownloadDirectory;
       _isLoadingCookie = false;
     });
     _uploadTaskManager.updateCookie(cookie);
     _uploadTaskManager.updateMaxConcurrentUploads(normalizedUploads);
+    _downloadTaskManager.updateCookie(cookie);
+    _downloadTaskManager.updateMaxConcurrentDownloads(normalizedDownloads);
+    _downloadTaskManager.updateDownloadDirectory(normalizedDownloadDirectory);
   }
 
   Future<void> _saveCookie(String value) async {
@@ -185,6 +220,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       _isSavingCookie = false;
     });
     _uploadTaskManager.updateCookie(value);
+    _downloadTaskManager.updateCookie(value);
   }
 
   Future<void> _saveMaxConcurrentUploads(int value) async {
@@ -200,6 +236,58 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_maxConcurrentUploadsStorageKey, normalized);
+  }
+
+  Future<void> _saveMaxConcurrentDownloads(int value) async {
+    final normalized = value.clamp(1, 10);
+    if (normalized == _maxConcurrentDownloads) {
+      return;
+    }
+
+    setState(() {
+      _maxConcurrentDownloads = normalized;
+    });
+    _downloadTaskManager.updateMaxConcurrentDownloads(normalized);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_maxConcurrentDownloadsStorageKey, normalized);
+  }
+
+  Future<void> _selectDownloadDirectory() async {
+    final initialDirectory =
+        _downloadDirectory.trim().isEmpty ? null : _downloadDirectory;
+    final selected = await getDirectoryPath(
+      initialDirectory: initialDirectory,
+    );
+
+    if (selected == null || selected.trim().isEmpty || !mounted) {
+      return;
+    }
+    await _saveDownloadDirectory(selected.trim());
+  }
+
+  Future<void> _resetDownloadDirectory() async {
+    final defaultPath = await resolveDefaultDownloadDirectoryPath();
+    await _saveDownloadDirectory(defaultPath.trim());
+  }
+
+  Future<void> _saveDownloadDirectory(String value) async {
+    final normalized = value.trim();
+    if (normalized == _downloadDirectory) {
+      return;
+    }
+
+    setState(() {
+      _downloadDirectory = normalized;
+    });
+    _downloadTaskManager.updateDownloadDirectory(normalized);
+
+    final prefs = await SharedPreferences.getInstance();
+    if (normalized.isEmpty) {
+      await prefs.remove(_downloadDirectoryStorageKey);
+      return;
+    }
+    await prefs.setString(_downloadDirectoryStorageKey, normalized);
   }
 }
 

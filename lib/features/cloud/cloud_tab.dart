@@ -24,6 +24,7 @@ class CloudTab extends StatefulWidget {
     required this.isLoadingCookie,
     required this.apiClient,
     required this.onUploadFiles,
+    required this.onDownloadMaterials,
     required this.onOpenTransferTab,
     this.enableExternalDrop = true,
   });
@@ -32,6 +33,8 @@ class CloudTab extends StatefulWidget {
   final bool isLoadingCookie;
   final PincoApiClient apiClient;
   final Future<void> Function(List<UploadSourceFile> files) onUploadFiles;
+  final Future<void> Function(List<DriveMaterial> materials)
+      onDownloadMaterials;
   final VoidCallback onOpenTransferTab;
   final bool enableExternalDrop;
 
@@ -215,6 +218,13 @@ class _CloudTabState extends State<CloudTab> {
                                   : _moveSelectedItems,
                               icon: const Icon(Icons.drive_file_move_outline),
                               tooltip: '移动所选',
+                            ),
+                            IconButton(
+                              onPressed: _isLoading || _selectedCount == 0
+                                  ? null
+                                  : _downloadSelectedItems,
+                              icon: const Icon(Icons.download_outlined),
+                              tooltip: '下载所选',
                             ),
                             IconButton(
                               onPressed: _isLoading || _selectedCount == 0

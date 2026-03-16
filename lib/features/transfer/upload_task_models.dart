@@ -9,6 +9,11 @@ enum UploadTaskStatus {
   failed,
 }
 
+enum TransferTaskType {
+  upload,
+  download,
+}
+
 class UploadSourceFile {
   const UploadSourceFile({
     required this.name,
@@ -24,6 +29,7 @@ class UploadSourceFile {
 class UploadTaskItem {
   const UploadTaskItem({
     required this.id,
+    required this.taskType,
     required this.name,
     required this.size,
     required this.parentFolderId,
@@ -35,9 +41,11 @@ class UploadTaskItem {
     required this.totalBytes,
     this.errorMessage,
     this.downloadUrl,
+    this.localPath,
   });
 
   final String id;
+  final TransferTaskType taskType;
   final String name;
   final int size;
   final String parentFolderId;
@@ -49,6 +57,7 @@ class UploadTaskItem {
   final int totalBytes;
   final String? errorMessage;
   final String? downloadUrl;
+  final String? localPath;
 
   UploadTaskItem copyWith({
     UploadTaskStatus? status,
@@ -59,9 +68,11 @@ class UploadTaskItem {
     String? errorMessage,
     bool clearError = false,
     String? downloadUrl,
+    String? localPath,
   }) {
     return UploadTaskItem(
       id: id,
+      taskType: taskType,
       name: name,
       size: size,
       parentFolderId: parentFolderId,
@@ -73,6 +84,7 @@ class UploadTaskItem {
       totalBytes: totalBytes ?? this.totalBytes,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       downloadUrl: downloadUrl ?? this.downloadUrl,
+      localPath: localPath ?? this.localPath,
     );
   }
 }

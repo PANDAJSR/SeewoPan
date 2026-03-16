@@ -1,22 +1,29 @@
 import 'package:flutter/material.dart';
 
+import 'download_task_manager.dart';
 import 'upload_task_manager.dart';
 
 class TransferTab extends StatelessWidget {
   const TransferTab({
     super.key,
-    required this.taskManager,
+    required this.uploadTaskManager,
+    required this.downloadTaskManager,
   });
 
-  final UploadTaskManager taskManager;
+  final UploadTaskManager uploadTaskManager;
+  final DownloadTaskManager downloadTaskManager;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: taskManager,
+    return ListenableBuilder(
+      listenable: Listenable.merge([uploadTaskManager, downloadTaskManager]),
       builder: (context, _) {
-        final tasks = taskManager.tasks.reversed.toList(growable: false);
-        final active = taskManager.activeTasks;
+        final tasks = [
+          ...uploadTaskManager.tasks,
+          ...downloadTaskManager.tasks,
+        ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final activeUploads = uploadTaskManager.activeTasks;
+        final activeDownloads = downloadTaskManager.activeTasks;
 
         return SafeArea(
           child: ListView(
@@ -28,9 +35,13 @@ class TransferTab extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                active.isEmpty
-                    ? '当前没有进行中的上传任务'
-                    : '进行中：${active.length} 个任务 · 总上传速度：${_formatSpeed(taskManager.totalUploadingSpeedBps)}',
+                _buildSummary(
+                  activeUploadCount: activeUploads.length,
+                  activeDownloadCount: activeDownloads.length,
+                  uploadSpeedBps: uploadTaskManager.totalUploadingSpeedBps,
+                  downloadSpeedBps:
+                      downloadTaskManager.totalDownloadingSpeedBps,
+                ),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
@@ -43,10 +54,18 @@ class TransferTab extends StatelessWidget {
                 ...tasks.map(
                   (task) => _TaskCard(
                     task: task,
-                    onPause: () => taskManager.pauseTask(task.id),
-                    onResume: () => taskManager.resumeTask(task.id),
-                    onCancel: () => taskManager.cancelTask(task.id),
-                    onRetry: () => taskManager.retryTask(task.id),
+                    onPause: task.taskType == TransferTaskType.upload
+                        ? () => uploadTaskManager.pauseTask(task.id)
+                        : () => downloadTaskManager.pauseTask(task.id),
+                    onResume: task.taskType == TransferTaskType.upload
+                        ? () => uploadTaskManager.resumeTask(task.id)
+                        : () => downloadTaskManager.resumeTask(task.id),
+                    onCancel: task.taskType == TransferTaskType.upload
+                        ? () => uploadTaskManager.cancelTask(task.id)
+                        : () => downloadTaskManager.cancelTask(task.id),
+                    onRetry: task.taskType == TransferTaskType.upload
+                        ? () => uploadTaskManager.retryTask(task.id)
+                        : () => downloadTaskManager.retryTask(task.id),
                   ),
                 ),
             ],
@@ -55,6 +74,19 @@ class TransferTab extends StatelessWidget {
       },
     );
   }
+}
+
+String _buildSummary({
+  required int activeUploadCount,
+  required int activeDownloadCount,
+  required double uploadSpeedBps,
+  required double downloadSpeedBps,
+}) {
+  final activeTotal = activeUploadCount + activeDownloadCount;
+  if (activeTotal == 0) {
+    return '当前没有进行中的上传/下载任务';
+  }
+  return '进行中：$activeTotal 个任务 · 上传：$activeUploadCount（${_formatSpeed(uploadSpeedBps)}） · 下载：$activeDownloadCount（${_formatSpeed(downloadSpeedBps)}）';
 }
 
 class _TaskCard extends StatelessWidget {
@@ -74,13 +106,14 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typeLabel = task.taskType == TransferTaskType.upload ? '上传' : '下载';
     final statusText = switch (task.status) {
       UploadTaskStatus.queued => '排队中',
-      UploadTaskStatus.uploading => '上传中',
+      UploadTaskStatus.uploading => '$typeLabel中',
       UploadTaskStatus.paused => '已暂停',
       UploadTaskStatus.canceled => '已取消',
-      UploadTaskStatus.success => '上传成功',
-      UploadTaskStatus.failed => '上传失败',
+      UploadTaskStatus.success => '$typeLabel成功',
+      UploadTaskStatus.failed => '$typeLabel失败',
     };
 
     return Card(
@@ -156,6 +189,19 @@ class _TaskCard extends StatelessWidget {
               '${_formatBytes(task.uploadedBytes)} / ${_formatBytes(task.totalBytes)} · ${_formatSpeed(task.speedBps)}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (task.localPath != null &&
+                task.localPath!.trim().isNotEmpty &&
+                task.status == UploadTaskStatus.success &&
+                task.taskType == TransferTaskType.download)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  task.localPath!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             if (task.errorMessage != null &&
                 task.errorMessage!.trim().isNotEmpty)
               Padding(
