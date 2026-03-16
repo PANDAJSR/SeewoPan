@@ -1,0 +1,104 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:seewopan/features/cloud/cloud_tab.dart';
+import 'package:seewopan/features/transfer/upload_task_manager.dart';
+import 'package:seewopan/shared/pinco_api_client.dart';
+
+void main() {
+  testWidgets('supports selecting multiple items and deleting them in batch', (
+    WidgetTester tester,
+  ) async {
+    final deleteRequests = <List<String>>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': '语文课件.pdf',
+                  'type': 'resource',
+                  'size': 1234,
+                },
+                {
+                  'id': 'm2',
+                  'folderId': '0',
+                  'name': '数学课件.pdf',
+                  'type': 'resource',
+                  'size': 4567,
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'DeleteV1DriveMaterials') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        final ids = (payload['resIds'] as List<dynamic>)
+            .map((e) => e.toString())
+            .toList(growable: false);
+        deleteRequests.add(ids);
+
+        return http.Response(
+          jsonEncode({'statusCode': 0, 'data': true, 'message': 'ok'}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('语文课件.pdf'), findsOneWidget);
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('多选'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('语文课件.pdf'));
+    await tester.pump();
+    await tester.tap(find.text('数学课件.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选择 2 项'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('删除所选'));
+    await tester.pumpAndSettle();
+    expect(find.text('确认删除已选择的 2 项吗？此操作不可撤销。'), findsOneWidget);
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(deleteRequests, hasLength(1));
+    expect(deleteRequests.first, ['m1', 'm2']);
+  });
+}

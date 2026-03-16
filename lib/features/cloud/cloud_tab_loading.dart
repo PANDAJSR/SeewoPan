@@ -31,6 +31,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       setState(() {
         _isLoading = false;
         _materials = items;
+        _syncSelectionAfterReload(items);
       });
     } catch (error) {
       if (!mounted) {
@@ -54,6 +55,8 @@ extension _CloudTabLoadingExtension on _CloudTabState {
 
     setState(() {
       _folderPath = _folderPath.sublist(0, _folderPath.length - 1);
+      _isSelectionMode = false;
+      _selectedMaterialIds = <String>{};
     });
     await _loadMaterials();
   }
@@ -63,12 +66,19 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       return;
     }
 
+    if (_isSelectionMode) {
+      _toggleMaterialSelection(item.id);
+      return;
+    }
+
     if (item.isFolder) {
       setState(() {
         _folderPath = [
           ..._folderPath,
           _FolderEntry(folderId: item.folderId, name: item.name),
         ];
+        _isSelectionMode = false;
+        _selectedMaterialIds = <String>{};
       });
       await _loadMaterials();
       return;

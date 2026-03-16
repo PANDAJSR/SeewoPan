@@ -1,6 +1,7 @@
 part of 'cloud_tab.dart';
 
 enum _ItemMenuAction {
+  select,
   rename,
   copyName,
   copyDownloadUrl,
@@ -18,6 +19,11 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
         position.dy,
       ),
       items: [
+        const PopupMenuItem(
+          value: _ItemMenuAction.select,
+          child: Text('选择'),
+        ),
+        const PopupMenuDivider(),
         const PopupMenuItem(
           value: _ItemMenuAction.rename,
           child: Text('重命名'),
@@ -44,6 +50,9 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
     }
 
     switch (selected) {
+      case _ItemMenuAction.select:
+        _enterSelectionMode(initialItem: item);
+        break;
       case _ItemMenuAction.rename:
         await _renameItem(item);
         break;
@@ -187,6 +196,8 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       if (!mounted) {
         return;
       }
+      _selectedMaterialIds = <String>{};
+      _isSelectionMode = false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(item.isFolder ? '文件夹已删除。' : '文件已删除。')),
       );
@@ -196,6 +207,53 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('删除失败：$error')),
+      );
+    }
+  }
+
+  Future<void> _deleteSelectedItems() async {
+    if (_selectedMaterialIds.isEmpty || _isLoading) {
+      return;
+    }
+
+    final selectedIds = _materials
+        .where((item) => _selectedMaterialIds.contains(item.id))
+        .map((item) => item.id)
+        .toList(growable: false);
+    if (selectedIds.isEmpty) {
+      _exitSelectionMode();
+      return;
+    }
+
+    final confirmed = await _showBatchDeleteConfirmDialog(selectedIds.length);
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.apiClient.deleteMaterials(
+        cookie: widget.cookie,
+        materialIds: selectedIds,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      await _loadMaterials(forceRefresh: true);
+      if (!mounted) {
+        return;
+      }
+      _selectedMaterialIds = <String>{};
+      _isSelectionMode = false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除 ${selectedIds.length} 项。')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('批量删除失败：$error')),
       );
     }
   }

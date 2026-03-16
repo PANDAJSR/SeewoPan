@@ -10,6 +10,7 @@ import '../transfer/upload_task_manager.dart';
 part 'cloud_tab_loading.dart';
 part 'cloud_tab_item_actions.dart';
 part 'cloud_tab_dialogs_and_format.dart';
+part 'cloud_tab_selection.dart';
 
 class CloudTab extends StatefulWidget {
   const CloudTab({
@@ -36,6 +37,8 @@ class _CloudTabState extends State<CloudTab> {
   String? _error;
   List<DriveMaterial> _materials = const [];
   List<_FolderEntry> _folderPath = const [];
+  bool _isSelectionMode = false;
+  Set<String> _selectedMaterialIds = <String>{};
 
   @override
   void initState() {
@@ -50,6 +53,8 @@ class _CloudTabState extends State<CloudTab> {
       _materials = const [];
       _error = null;
       _folderPath = const [];
+      _isSelectionMode = false;
+      _selectedMaterialIds = <String>{};
       _tryLoadIfReady();
     }
   }
@@ -79,19 +84,42 @@ class _CloudTabState extends State<CloudTab> {
             Row(
               children: [
                 Text(
-                  '云盘文件',
+                  _isSelectionMode ? '已选择 $_selectedCount 项' : '云盘文件',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const Spacer(),
+                if (_isSelectionMode)
+                  IconButton(
+                    onPressed: _isLoading || _selectedCount == 0
+                        ? null
+                        : _deleteSelectedItems,
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: '删除所选',
+                  )
+                else ...[
+                  IconButton(
+                    onPressed: _isLoading ? null : _pickAndUploadFiles,
+                    icon: const Icon(Icons.file_upload_outlined),
+                    tooltip: '上传文件',
+                  ),
+                  IconButton(
+                    onPressed: _isLoading ? null : _createFolder,
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    tooltip: '新建文件夹',
+                  ),
+                ],
                 IconButton(
-                  onPressed: _isLoading ? null : _pickAndUploadFiles,
-                  icon: const Icon(Icons.file_upload_outlined),
-                  tooltip: '上传文件',
-                ),
-                IconButton(
-                  onPressed: _isLoading ? null : _createFolder,
-                  icon: const Icon(Icons.create_new_folder_outlined),
-                  tooltip: '新建文件夹',
+                  onPressed: _isLoading || _materials.isEmpty
+                      ? null
+                      : (_isSelectionMode
+                          ? _exitSelectionMode
+                          : _enterSelectionMode),
+                  icon: Icon(
+                    _isSelectionMode
+                        ? Icons.close_fullscreen_rounded
+                        : Icons.checklist_rounded,
+                  ),
+                  tooltip: _isSelectionMode ? '退出多选' : '多选',
                 ),
                 IconButton(
                   onPressed: _isLoading
@@ -131,19 +159,30 @@ class _CloudTabState extends State<CloudTab> {
                 clipBehavior: Clip.antiAlias,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onSecondaryTapDown: (details) =>
-                      _showItemContextMenu(details.globalPosition, item),
-                  onLongPressStart: (details) =>
-                      _showItemContextMenu(details.globalPosition, item),
+                  onSecondaryTapDown: _isSelectionMode
+                      ? null
+                      : (details) =>
+                          _showItemContextMenu(details.globalPosition, item),
+                  onLongPressStart: _isSelectionMode
+                      ? null
+                      : (details) =>
+                          _showItemContextMenu(details.globalPosition, item),
                   child: ListTile(
                     leading: item.isFolder
                         ? const Icon(Icons.folder_outlined)
                         : FileIcon(item.name, size: 24),
                     title: Text(item.name),
                     subtitle: Text(_buildSubtitle(item)),
-                    trailing: item.isFolder
-                        ? const Icon(Icons.chevron_right_rounded)
-                        : null,
+                    trailing: _isSelectionMode
+                        ? Checkbox(
+                            value: _selectedMaterialIds.contains(item.id),
+                            onChanged: _isLoading
+                                ? null
+                                : (_) => _toggleMaterialSelection(item.id),
+                          )
+                        : (item.isFolder
+                            ? const Icon(Icons.chevron_right_rounded)
+                            : null),
                     onTap: () => _handleItemTap(item),
                   ),
                 ),
