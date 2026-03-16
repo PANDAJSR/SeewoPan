@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seewopan/features/transfer/upload_task_manager.dart';
 import 'package:seewopan/shared/pinco_api_client.dart';
@@ -16,6 +17,7 @@ void main() {
         required String fileName,
         String parentFolderId = '0',
         String? mimeType,
+        CancelToken? cancelToken,
         UploadProgressCallback? onProgress,
       }) async {
         onProgress?.call(
@@ -86,6 +88,7 @@ void main() {
         required String fileName,
         String parentFolderId = '0',
         String? mimeType,
+        CancelToken? cancelToken,
         UploadProgressCallback? onProgress,
       }) async {
         active += 1;
@@ -153,6 +156,7 @@ void main() {
         required String fileName,
         String parentFolderId = '0',
         String? mimeType,
+        CancelToken? cancelToken,
         UploadProgressCallback? onProgress,
       }) async {
         final elapsed = fileName == 'a.bin'
@@ -215,6 +219,137 @@ void main() {
       return manager.tasks
           .every((task) => task.status == UploadTaskStatus.success);
     });
+  });
+
+  test('supports pause and resume for queued task', () async {
+    final releaseUpload = Completer<void>();
+    var started = 0;
+    final manager = UploadTaskManager(
+      apiClient: PincoApiClient(),
+      uploadFileHandler: ({
+        required String cookie,
+        required Uint8List bytes,
+        required String fileName,
+        String parentFolderId = '0',
+        String? mimeType,
+        CancelToken? cancelToken,
+        UploadProgressCallback? onProgress,
+      }) async {
+        started += 1;
+        await releaseUpload.future;
+        return UploadFileResult(
+          deduplicated: false,
+          name: fileName,
+          size: bytes.length,
+          mimeType: 'application/octet-stream',
+          fileMd5: 'md5',
+          fileKey: 'file-key',
+          downloadUrl: 'https://example.com/$fileName',
+          metrics: const UploadMetrics(
+            fileSizeBytes: 1024,
+            totalElapsed: Duration(seconds: 1),
+            uploadElapsed: Duration(seconds: 1),
+            uploadSpeedBps: 1024,
+          ),
+        );
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    manager.updateMaxConcurrentUploads(1);
+    await manager.enqueueFiles([
+      UploadSourceFile(
+        name: 'first.bin',
+        bytes: Uint8List.fromList(List<int>.filled(1024, 1)),
+        parentFolderId: '0',
+      ),
+      UploadSourceFile(
+        name: 'second.bin',
+        bytes: Uint8List.fromList(List<int>.filled(1024, 2)),
+        parentFolderId: '0',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      return manager.tasks.length == 2 &&
+          manager.tasks.any((task) => task.status == UploadTaskStatus.queued);
+    });
+    final queuedId = manager.tasks
+        .firstWhere((task) => task.status == UploadTaskStatus.queued)
+        .id;
+
+    manager.pauseTask(queuedId);
+    expect(
+      manager.tasks.firstWhere((task) => task.id == queuedId).status,
+      UploadTaskStatus.paused,
+    );
+
+    releaseUpload.complete();
+    await _waitUntil(() {
+      final target = manager.tasks.firstWhere((task) => task.id == queuedId);
+      return target.status == UploadTaskStatus.paused;
+    });
+    expect(started, 1);
+
+    manager.resumeTask(queuedId);
+    await _waitUntil(() {
+      final target = manager.tasks.firstWhere((task) => task.id == queuedId);
+      return target.status == UploadTaskStatus.success;
+    });
+    expect(started, 2);
+  });
+
+  test('supports cancel for uploading task', () async {
+    final manager = UploadTaskManager(
+      apiClient: PincoApiClient(),
+      uploadFileHandler: ({
+        required String cookie,
+        required Uint8List bytes,
+        required String fileName,
+        String parentFolderId = '0',
+        String? mimeType,
+        CancelToken? cancelToken,
+        UploadProgressCallback? onProgress,
+      }) async {
+        onProgress?.call(
+          UploadProgress(
+            sentBytes: 128,
+            totalBytes: bytes.length,
+            elapsed: const Duration(milliseconds: 100),
+            estimatedProgress: 0.3,
+          ),
+        );
+        await (cancelToken?.whenCancel ?? Future<void>.value());
+        throw DioException.requestCancelled(
+          requestOptions: RequestOptions(path: '/mock-upload'),
+          reason: 'Canceled by test',
+        );
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    await manager.enqueueFiles([
+      UploadSourceFile(
+        name: 'cancel-me.bin',
+        bytes: Uint8List.fromList(List<int>.filled(1024, 1)),
+        parentFolderId: '0',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      return manager.tasks.isNotEmpty &&
+          manager.tasks.first.status == UploadTaskStatus.uploading;
+    });
+
+    final taskId = manager.tasks.first.id;
+    manager.cancelTask(taskId);
+
+    await _waitUntil(() {
+      return manager.tasks.first.status == UploadTaskStatus.canceled;
+    });
+    final task = manager.tasks.first;
+    expect(task.progress, 0);
+    expect(task.uploadedBytes, 0);
   });
 }
 

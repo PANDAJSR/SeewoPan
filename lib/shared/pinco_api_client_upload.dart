@@ -7,6 +7,7 @@ extension PincoApiClientUploadExtension on PincoApiClient {
     required String fileName,
     String parentFolderId = '0',
     String? mimeType,
+    CancelToken? cancelToken,
     UploadProgressCallback? onProgress,
   }) async {
     final totalWatch = Stopwatch()..start();
@@ -157,6 +158,7 @@ extension PincoApiClientUploadExtension on PincoApiClient {
       fileName: normalizedName,
       mimeType: resolvedMimeType,
       chunkSizeBytes: PincoApiClient._uploadChunkSizeBytes,
+      cancelToken: cancelToken,
       onProgress: onProgress == null
           ? null
           : (sent, total) {
@@ -238,6 +240,7 @@ extension PincoApiClientUploadExtension on PincoApiClient {
     required String fileName,
     required String mimeType,
     required int chunkSizeBytes,
+    CancelToken? cancelToken,
     void Function(int sent, int total)? onProgress,
   }) async {
     final formData = FormData();
@@ -307,6 +310,7 @@ extension PincoApiClientUploadExtension on PincoApiClient {
       data: formData,
       options:
           Options(headers: requestHeaders, responseType: ResponseType.plain),
+      cancelToken: cancelToken,
       onSendProgress: onProgress,
     );
 

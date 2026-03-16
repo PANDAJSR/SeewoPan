@@ -40,7 +40,14 @@ class TransferTab extends StatelessWidget {
                   child: Center(child: Text('暂无传输记录。')),
                 )
               else
-                ...tasks.map((task) => _TaskCard(task: task)),
+                ...tasks.map(
+                  (task) => _TaskCard(
+                    task: task,
+                    onPause: () => taskManager.pauseTask(task.id),
+                    onResume: () => taskManager.resumeTask(task.id),
+                    onCancel: () => taskManager.cancelTask(task.id),
+                  ),
+                ),
             ],
           ),
         );
@@ -50,15 +57,25 @@ class TransferTab extends StatelessWidget {
 }
 
 class _TaskCard extends StatelessWidget {
-  const _TaskCard({required this.task});
+  const _TaskCard({
+    required this.task,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
 
   final UploadTaskItem task;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
     final statusText = switch (task.status) {
       UploadTaskStatus.queued => '排队中',
       UploadTaskStatus.uploading => '上传中',
+      UploadTaskStatus.paused => '已暂停',
+      UploadTaskStatus.canceled => '已取消',
       UploadTaskStatus.success => '上传成功',
       UploadTaskStatus.failed => '上传失败',
     };
@@ -89,13 +106,46 @@ class _TaskCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: task.status == UploadTaskStatus.failed ? 0 : task.progress,
+              value: task.status == UploadTaskStatus.failed ||
+                      task.status == UploadTaskStatus.canceled
+                  ? 0
+                  : task.progress,
             ),
             const SizedBox(height: 8),
             Text(
               '${_formatBytes(task.uploadedBytes)} / ${_formatBytes(task.totalBytes)} · ${_formatSpeed(task.speedBps)}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (task.status == UploadTaskStatus.queued ||
+                task.status == UploadTaskStatus.uploading ||
+                task.status == UploadTaskStatus.paused)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    if (task.status == UploadTaskStatus.queued ||
+                        task.status == UploadTaskStatus.uploading)
+                      OutlinedButton.icon(
+                        onPressed: onPause,
+                        icon: const Icon(Icons.pause_circle_outline),
+                        label: const Text('暂停'),
+                      ),
+                    if (task.status == UploadTaskStatus.paused)
+                      OutlinedButton.icon(
+                        onPressed: onResume,
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: const Text('继续'),
+                      ),
+                    TextButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('取消'),
+                    ),
+                  ],
+                ),
+              ),
             if (task.errorMessage != null &&
                 task.errorMessage!.trim().isNotEmpty)
               Padding(

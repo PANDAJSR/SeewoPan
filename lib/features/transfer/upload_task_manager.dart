@@ -1,84 +1,13 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../shared/pinco_api_client.dart';
+import 'upload_task_models.dart';
 
-enum UploadTaskStatus {
-  queued,
-  uploading,
-  success,
-  failed,
-}
-
-class UploadSourceFile {
-  const UploadSourceFile({
-    required this.name,
-    required this.bytes,
-    required this.parentFolderId,
-  });
-
-  final String name;
-  final Uint8List bytes;
-  final String parentFolderId;
-}
-
-class UploadTaskItem {
-  const UploadTaskItem({
-    required this.id,
-    required this.name,
-    required this.size,
-    required this.parentFolderId,
-    required this.status,
-    required this.createdAt,
-    required this.progress,
-    required this.speedBps,
-    required this.uploadedBytes,
-    required this.totalBytes,
-    this.errorMessage,
-    this.downloadUrl,
-  });
-
-  final String id;
-  final String name;
-  final int size;
-  final String parentFolderId;
-  final UploadTaskStatus status;
-  final DateTime createdAt;
-  final double progress;
-  final double speedBps;
-  final int uploadedBytes;
-  final int totalBytes;
-  final String? errorMessage;
-  final String? downloadUrl;
-
-  UploadTaskItem copyWith({
-    UploadTaskStatus? status,
-    double? progress,
-    double? speedBps,
-    int? uploadedBytes,
-    int? totalBytes,
-    String? errorMessage,
-    bool clearError = false,
-    String? downloadUrl,
-  }) {
-    return UploadTaskItem(
-      id: id,
-      name: name,
-      size: size,
-      parentFolderId: parentFolderId,
-      status: status ?? this.status,
-      createdAt: createdAt,
-      progress: progress ?? this.progress,
-      speedBps: speedBps ?? this.speedBps,
-      uploadedBytes: uploadedBytes ?? this.uploadedBytes,
-      totalBytes: totalBytes ?? this.totalBytes,
-      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      downloadUrl: downloadUrl ?? this.downloadUrl,
-    );
-  }
-}
+export 'upload_task_models.dart';
 
 typedef UploadFileHandler = Future<UploadFileResult> Function({
   required String cookie,
@@ -86,8 +15,14 @@ typedef UploadFileHandler = Future<UploadFileResult> Function({
   required String fileName,
   String parentFolderId,
   String? mimeType,
+  CancelToken? cancelToken,
   UploadProgressCallback? onProgress,
 });
+
+enum _TaskStopAction {
+  paused,
+  canceled,
+}
 
 class UploadTaskManager extends ChangeNotifier {
   UploadTaskManager({
@@ -98,6 +33,9 @@ class UploadTaskManager extends ChangeNotifier {
   final List<UploadTaskItem> _tasks = <UploadTaskItem>[];
   final Map<String, UploadSourceFile> _sourceByTaskId =
       <String, UploadSourceFile>{};
+  final Map<String, CancelToken> _cancelTokenByTaskId = <String, CancelToken>{};
+  final Map<String, _TaskStopAction> _stopActionByTaskId =
+      <String, _TaskStopAction>{};
   final Random _random = Random();
 
   String _cookie = '';
@@ -160,6 +98,100 @@ class UploadTaskManager extends ChangeNotifier {
     unawaited(_runQueue());
   }
 
+  void pauseTask(String taskId) {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    final task = _tasks[index];
+    if (task.status == UploadTaskStatus.queued) {
+      _tasks[index] = task.copyWith(
+        status: UploadTaskStatus.paused,
+        speedBps: 0,
+      );
+      notifyListeners();
+      return;
+    }
+
+    if (task.status != UploadTaskStatus.uploading) {
+      return;
+    }
+
+    _stopActionByTaskId[taskId] = _TaskStopAction.paused;
+    _tasks[index] = task.copyWith(
+      status: UploadTaskStatus.paused,
+      speedBps: 0,
+    );
+    notifyListeners();
+    _cancelTokenByTaskId[taskId]?.cancel('Paused by user');
+  }
+
+  void resumeTask(String taskId) {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    final task = _tasks[index];
+    if (task.status != UploadTaskStatus.paused) {
+      return;
+    }
+
+    _tasks[index] = task.copyWith(
+      status: UploadTaskStatus.queued,
+      progress: 0,
+      speedBps: 0,
+      uploadedBytes: 0,
+      totalBytes: task.size,
+      clearError: true,
+    );
+    notifyListeners();
+    unawaited(_runQueue());
+  }
+
+  void cancelTask(String taskId) {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return;
+    }
+
+    final task = _tasks[index];
+    if (task.status == UploadTaskStatus.success ||
+        task.status == UploadTaskStatus.failed ||
+        task.status == UploadTaskStatus.canceled) {
+      return;
+    }
+
+    if (task.status == UploadTaskStatus.uploading) {
+      _stopActionByTaskId[taskId] = _TaskStopAction.canceled;
+      _tasks[index] = task.copyWith(
+        status: UploadTaskStatus.canceled,
+        progress: 0,
+        speedBps: 0,
+        uploadedBytes: 0,
+        totalBytes: task.size,
+        clearError: true,
+      );
+      _sourceByTaskId.remove(taskId);
+      notifyListeners();
+      _cancelTokenByTaskId[taskId]?.cancel('Canceled by user');
+      return;
+    }
+
+    _tasks[index] = task.copyWith(
+      status: UploadTaskStatus.canceled,
+      progress: 0,
+      speedBps: 0,
+      uploadedBytes: 0,
+      totalBytes: task.size,
+      clearError: true,
+    );
+    _sourceByTaskId.remove(taskId);
+    notifyListeners();
+    unawaited(_runQueue());
+  }
+
   Future<void> _runQueue() async {
     if (_isDispatching) {
       return;
@@ -213,15 +245,22 @@ class UploadTaskManager extends ChangeNotifier {
     required String taskId,
     required UploadSourceFile source,
   }) async {
+    final cancelToken = CancelToken();
+    _cancelTokenByTaskId[taskId] = cancelToken;
+
     try {
       final result = await _uploadFileHandler(
         cookie: _cookie,
         bytes: source.bytes,
         fileName: source.name,
         parentFolderId: source.parentFolderId,
+        cancelToken: cancelToken,
         onProgress: (progress) {
           final index = _tasks.indexWhere((item) => item.id == taskId);
           if (index < 0) {
+            return;
+          }
+          if (_tasks[index].status != UploadTaskStatus.uploading) {
             return;
           }
           _tasks[index] = _tasks[index].copyWith(
@@ -237,6 +276,10 @@ class UploadTaskManager extends ChangeNotifier {
 
       final index = _tasks.indexWhere((item) => item.id == taskId);
       if (index >= 0) {
+        if (_tasks[index].status == UploadTaskStatus.paused ||
+            _tasks[index].status == UploadTaskStatus.canceled) {
+          return;
+        }
         _tasks[index] = _tasks[index].copyWith(
           status: UploadTaskStatus.success,
           progress: 1,
@@ -252,6 +295,30 @@ class UploadTaskManager extends ChangeNotifier {
     } catch (error) {
       final index = _tasks.indexWhere((item) => item.id == taskId);
       if (index >= 0) {
+        final stopAction = _stopActionByTaskId.remove(taskId);
+        if (error is DioException &&
+            CancelToken.isCancel(error) &&
+            stopAction != null) {
+          if (stopAction == _TaskStopAction.canceled) {
+            _tasks[index] = _tasks[index].copyWith(
+              status: UploadTaskStatus.canceled,
+              progress: 0,
+              speedBps: 0,
+              uploadedBytes: 0,
+              totalBytes: _tasks[index].size,
+              clearError: true,
+            );
+            _sourceByTaskId.remove(taskId);
+          } else {
+            _tasks[index] = _tasks[index].copyWith(
+              status: UploadTaskStatus.paused,
+              speedBps: 0,
+              clearError: true,
+            );
+          }
+          notifyListeners();
+          return;
+        }
         _tasks[index] = _tasks[index].copyWith(
           status: UploadTaskStatus.failed,
           errorMessage: '$error',
@@ -260,6 +327,8 @@ class UploadTaskManager extends ChangeNotifier {
         notifyListeners();
       }
     } finally {
+      _cancelTokenByTaskId.remove(taskId);
+      _stopActionByTaskId.remove(taskId);
       _runningUploads = max(0, _runningUploads - 1);
       unawaited(_runQueue());
     }
