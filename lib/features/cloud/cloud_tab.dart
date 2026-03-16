@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_icon/file_icon.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +24,7 @@ class CloudTab extends StatefulWidget {
     required this.apiClient,
     required this.onUploadFiles,
     required this.onOpenTransferTab,
+    this.enableExternalDrop = true,
   });
 
   final String cookie;
@@ -28,6 +32,7 @@ class CloudTab extends StatefulWidget {
   final PincoApiClient apiClient;
   final Future<void> Function(List<UploadSourceFile> files) onUploadFiles;
   final VoidCallback onOpenTransferTab;
+  final bool enableExternalDrop;
 
   @override
   State<CloudTab> createState() => _CloudTabState();
@@ -40,6 +45,7 @@ class _CloudTabState extends State<CloudTab> {
   List<_FolderEntry> _folderPath = const [];
   bool _isSelectionMode = false;
   Set<String> _selectedMaterialIds = <String>{};
+  bool _isDragHovering = false;
 
   @override
   void initState() {
@@ -76,138 +82,207 @@ class _CloudTabState extends State<CloudTab> {
     }
 
     return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: () => _loadMaterials(forceRefresh: true),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+      child: DropTarget(
+        enable: widget.enableExternalDrop,
+        onDragEntered: (_) {
+          if (_isDragHovering || !mounted) {
+            return;
+          }
+          setState(() {
+            _isDragHovering = true;
+          });
+        },
+        onDragExited: (_) {
+          if (!_isDragHovering || !mounted) {
+            return;
+          }
+          setState(() {
+            _isDragHovering = false;
+          });
+        },
+        onDragDone: (details) {
+          if (_isDragHovering && mounted) {
+            setState(() {
+              _isDragHovering = false;
+            });
+          }
+          unawaited(_handleDroppedFiles(details.files));
+        },
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Text(
-                  _isSelectionMode ? '已选择 $_selectedCount 项' : '云盘文件',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                if (_isSelectionMode)
+            RefreshIndicator(
+              onRefresh: () => _loadMaterials(forceRefresh: true),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
                   Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      Text(
+                        _isSelectionMode ? '已选择 $_selectedCount 项' : '云盘文件',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const Spacer(),
+                      if (_isSelectionMode)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: _isLoading || _selectedCount == 0
+                                  ? null
+                                  : _createFolderWithSelectedItems,
+                              icon:
+                                  const Icon(Icons.create_new_folder_outlined),
+                              tooltip: '用所选项目新建文件夹',
+                            ),
+                            IconButton(
+                              onPressed: _isLoading || _selectedCount == 0
+                                  ? null
+                                  : _moveSelectedItems,
+                              icon: const Icon(Icons.drive_file_move_outline),
+                              tooltip: '移动所选',
+                            ),
+                            IconButton(
+                              onPressed: _isLoading || _selectedCount == 0
+                                  ? null
+                                  : _deleteSelectedItems,
+                              icon: const Icon(Icons.delete_outline),
+                              tooltip: '删除所选',
+                            ),
+                          ],
+                        )
+                      else ...[
+                        IconButton(
+                          onPressed: _isLoading ? null : _pickAndUploadFiles,
+                          icon: const Icon(Icons.file_upload_outlined),
+                          tooltip: '上传文件',
+                        ),
+                        IconButton(
+                          onPressed: _isLoading ? null : _createFolder,
+                          icon: const Icon(Icons.create_new_folder_outlined),
+                          tooltip: '新建文件夹',
+                        ),
+                      ],
                       IconButton(
-                        onPressed: _isLoading || _selectedCount == 0
+                        onPressed: _isLoading || _materials.isEmpty
                             ? null
-                            : _createFolderWithSelectedItems,
-                        icon: const Icon(Icons.create_new_folder_outlined),
-                        tooltip: '用所选项目新建文件夹',
+                            : (_isSelectionMode
+                                ? _exitSelectionMode
+                                : _enterSelectionMode),
+                        icon: Icon(
+                          _isSelectionMode
+                              ? Icons.close_fullscreen_rounded
+                              : Icons.checklist_rounded,
+                        ),
+                        tooltip: _isSelectionMode ? '退出多选' : '多选',
                       ),
                       IconButton(
-                        onPressed: _isLoading || _selectedCount == 0
+                        onPressed: _isLoading
                             ? null
-                            : _moveSelectedItems,
-                        icon: const Icon(Icons.drive_file_move_outline),
-                        tooltip: '移动所选',
-                      ),
-                      IconButton(
-                        onPressed: _isLoading || _selectedCount == 0
-                            ? null
-                            : _deleteSelectedItems,
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: '删除所选',
+                            : () => _loadMaterials(forceRefresh: true),
+                        icon: _isLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh),
+                        tooltip: '刷新',
                       ),
                     ],
-                  )
-                else ...[
-                  IconButton(
-                    onPressed: _isLoading ? null : _pickAndUploadFiles,
-                    icon: const Icon(Icons.file_upload_outlined),
-                    tooltip: '上传文件',
                   ),
-                  IconButton(
-                    onPressed: _isLoading ? null : _createFolder,
-                    icon: const Icon(Icons.create_new_folder_outlined),
-                    tooltip: '新建文件夹',
+                  const SizedBox(height: 8),
+                  _buildFolderPath(context),
+                  const SizedBox(height: 8),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _error!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                      ),
+                    ),
+                  if (!_isLoading && _materials.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 48),
+                      child: Center(child: Text('当前目录暂无文件。')),
+                    ),
+                  ..._materials.map(
+                    (item) => Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onSecondaryTapDown: _isSelectionMode
+                            ? null
+                            : (details) => _showItemContextMenu(
+                                  details.globalPosition,
+                                  item,
+                                ),
+                        onLongPressStart: _isSelectionMode
+                            ? null
+                            : (details) => _showItemContextMenu(
+                                  details.globalPosition,
+                                  item,
+                                ),
+                        child: ListTile(
+                          leading: item.isFolder
+                              ? const Icon(Icons.folder_outlined)
+                              : FileIcon(item.name, size: 24),
+                          title: Text(item.name),
+                          subtitle: Text(_buildSubtitle(item)),
+                          trailing: _isSelectionMode
+                              ? Checkbox(
+                                  value: _selectedMaterialIds.contains(item.id),
+                                  onChanged: _isLoading
+                                      ? null
+                                      : (_) =>
+                                          _toggleMaterialSelection(item.id),
+                                )
+                              : (item.isFolder
+                                  ? const Icon(Icons.chevron_right_rounded)
+                                  : null),
+                          onTap: () => _handleItemTap(item),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
-                IconButton(
-                  onPressed: _isLoading || _materials.isEmpty
-                      ? null
-                      : (_isSelectionMode
-                          ? _exitSelectionMode
-                          : _enterSelectionMode),
-                  icon: Icon(
-                    _isSelectionMode
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.checklist_rounded,
-                  ),
-                  tooltip: _isSelectionMode ? '退出多选' : '多选',
-                ),
-                IconButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () => _loadMaterials(forceRefresh: true),
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                  tooltip: '刷新',
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
-            _buildFolderPath(context),
-            const SizedBox(height: 8),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  _error!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
+            if (_isDragHovering && widget.enableExternalDrop)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.08),
+                    alignment: Alignment.center,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
-                ),
-              ),
-            if (!_isLoading && _materials.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 48),
-                child: Center(child: Text('当前目录暂无文件。')),
-              ),
-            ..._materials.map(
-              (item) => Card(
-                clipBehavior: Clip.antiAlias,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onSecondaryTapDown: _isSelectionMode
-                      ? null
-                      : (details) =>
-                          _showItemContextMenu(details.globalPosition, item),
-                  onLongPressStart: _isSelectionMode
-                      ? null
-                      : (details) =>
-                          _showItemContextMenu(details.globalPosition, item),
-                  child: ListTile(
-                    leading: item.isFolder
-                        ? const Icon(Icons.folder_outlined)
-                        : FileIcon(item.name, size: 24),
-                    title: Text(item.name),
-                    subtitle: Text(_buildSubtitle(item)),
-                    trailing: _isSelectionMode
-                        ? Checkbox(
-                            value: _selectedMaterialIds.contains(item.id),
-                            onChanged: _isLoading
-                                ? null
-                                : (_) => _toggleMaterialSelection(item.id),
-                          )
-                        : (item.isFolder
-                            ? const Icon(Icons.chevron_right_rounded)
-                            : null),
-                    onTap: () => _handleItemTap(item),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        child: Text('松开以上传到当前文件夹'),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

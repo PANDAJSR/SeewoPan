@@ -110,24 +110,57 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       return;
     }
 
-    final files = <UploadSourceFile>[];
-    for (final file in selectedFiles) {
-      final bytes = await file.readAsBytes();
-      if (bytes.isEmpty) {
-        continue;
-      }
-      files.add(
-        UploadSourceFile(
-          name: file.name,
-          bytes: bytes,
-          parentFolderId: _currentFolderId,
-        ),
-      );
-    }
-    if (!mounted) {
+    await _enqueueUploadFiles(selectedFiles, readErrorPrefix: '读取文件失败');
+  }
+
+  Future<void> _handleDroppedFiles(List<DropItem> droppedItems) async {
+    if (droppedItems.isEmpty || !mounted) {
       return;
     }
 
+    final filesOnly = droppedItems.whereType<DropItemFile>().toList();
+    if (filesOnly.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂不支持直接拖拽文件夹上传，请拖拽文件。')),
+      );
+      return;
+    }
+
+    await _enqueueUploadFiles(filesOnly, readErrorPrefix: '读取拖拽文件失败');
+  }
+
+  Future<void> _enqueueUploadFiles(
+    List<XFile> sourceFiles, {
+    required String readErrorPrefix,
+  }) async {
+    final targetFolderId = _currentFolderId;
+    final files = <UploadSourceFile>[];
+    for (final file in sourceFiles) {
+      try {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          continue;
+        }
+        files.add(
+          UploadSourceFile(
+            name: file.name,
+            bytes: bytes,
+            parentFolderId: targetFolderId,
+          ),
+        );
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$readErrorPrefix（${file.name}）：$error')),
+        );
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
     if (files.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('未读取到文件内容，请重试。')),
@@ -139,7 +172,6 @@ extension _CloudTabLoadingExtension on _CloudTabState {
     if (!mounted) {
       return;
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('已添加 ${files.length} 个上传任务。')),
     );
