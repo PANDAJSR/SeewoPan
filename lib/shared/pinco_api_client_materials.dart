@@ -1,0 +1,203 @@
+part of 'pinco_api_client.dart';
+
+extension PincoApiClientMaterialsExtension on PincoApiClient {
+  Future<UserProfile> getUserInfo(
+    String cookie, {
+    bool forceRefresh = false,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    if (!forceRefresh) {
+      final cached = _userProfileCache[normalizedCookie];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
+    final data = await _postAction(
+      actionName: 'GetV1UsersInfo',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{},
+    );
+
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Missing user data.');
+    }
+
+    final profile = UserProfile.fromApi(data);
+    _userProfileCache[normalizedCookie] = profile;
+    return profile;
+  }
+
+  Future<List<DriveMaterial>> getRootMaterials({
+    required String cookie,
+    int page = 0,
+    int size = 50,
+    bool forceRefresh = false,
+  }) async {
+    return getMaterials(
+      cookie: cookie,
+      folderId: '0',
+      page: page,
+      size: size,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<DriveMaterial>> getMaterials({
+    required String cookie,
+    required String folderId,
+    int page = 0,
+    int size = 50,
+    String tagName = 'resource,folder',
+    bool forceRefresh = false,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final cacheKey = '$normalizedCookie::$folderId::$page::$size::$tagName';
+    if (!forceRefresh) {
+      final cached = _materialsCache[cacheKey];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
+    final data = await _postAction(
+      actionName: 'GetV1DriveMaterials',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'keyword': '',
+        'size': size,
+        'tagName': tagName,
+        'page': page,
+        'folderId': folderId,
+      },
+    );
+
+    final rawList = _extractList(data);
+    final materials = rawList
+        .whereType<Map<String, dynamic>>()
+        .map(DriveMaterial.fromApi)
+        .toList(growable: false);
+    _materialsCache[cacheKey] = materials;
+    return materials;
+  }
+
+  String buildMaterialDownloadUrl(String materialId) {
+    return '${PincoApiClient._baseUrl}/server-main/api/v1/drive/materials/download'
+        '?resId=${Uri.encodeQueryComponent(materialId)}';
+  }
+
+  Future<void> renameMaterial({
+    required String cookie,
+    required String materialId,
+    required String name,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialId = materialId.trim();
+    final normalizedName = name.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialId.isEmpty) {
+      throw ArgumentError.value(
+        materialId,
+        'materialId',
+        'Material ID cannot be empty.',
+      );
+    }
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Name cannot be empty.');
+    }
+
+    final data = await _postAction(
+      actionName: 'PutV1DriveMaterialsByMaterialIdName',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'materialId': normalizedMaterialId,
+        'name': normalizedName,
+      },
+    );
+
+    if (data == false) {
+      throw const FormatException('Rename request failed.');
+    }
+
+    _materialsCache.clear();
+  }
+
+  Future<void> deleteMaterials({
+    required String cookie,
+    required List<String> materialIds,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedMaterialIds = materialIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedMaterialIds.isEmpty) {
+      throw ArgumentError.value(
+        materialIds,
+        'materialIds',
+        'Material IDs cannot be empty.',
+      );
+    }
+
+    await _postAction(
+      actionName: 'DeleteV1DriveMaterials',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{'resIds': normalizedMaterialIds},
+    );
+
+    _materialsCache.clear();
+  }
+
+  Future<String> createFolder({
+    required String cookie,
+    required String name,
+    String parentFolderId = '0',
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final normalizedName = name.trim();
+    final normalizedParentFolderId = parentFolderId.trim();
+
+    if (normalizedCookie.isEmpty) {
+      throw ArgumentError.value(cookie, 'cookie', 'Cookie cannot be empty.');
+    }
+    if (normalizedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Folder name cannot be empty.');
+    }
+    if (normalizedParentFolderId.isEmpty) {
+      throw ArgumentError.value(
+        parentFolderId,
+        'parentFolderId',
+        'Parent folder ID cannot be empty.',
+      );
+    }
+
+    final data = await _postAction(
+      actionName: 'PostV1DriveMaterialsFolders',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{
+        'name': normalizedName,
+        'parentFolderId': normalizedParentFolderId,
+      },
+    );
+
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Missing folder data.');
+    }
+
+    final folderId =
+        _pick(data, ['id', 'folderId', 'resId'])?.toString().trim();
+    if (folderId == null || folderId.isEmpty) {
+      throw const FormatException('Missing folder id.');
+    }
+
+    _materialsCache.clear();
+    return folderId;
+  }
+}
