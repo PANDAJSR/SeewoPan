@@ -15,6 +15,7 @@ part 'cloud_tab_item_actions.dart';
 part 'cloud_tab_item_share.dart';
 part 'cloud_tab_dialogs_and_format.dart';
 part 'cloud_tab_selection.dart';
+part 'cloud_tab_sorting.dart';
 
 class CloudTab extends StatefulWidget {
   const CloudTab({
@@ -46,6 +47,7 @@ class _CloudTabState extends State<CloudTab> {
   bool _isSelectionMode = false;
   Set<String> _selectedMaterialIds = <String>{};
   bool _isDragHovering = false;
+  _MaterialSortOption _sortOption = _MaterialSortOption.nameAsc;
 
   @override
   void initState() {
@@ -152,6 +154,23 @@ class _CloudTabState extends State<CloudTab> {
                           ],
                         )
                       else ...[
+                        PopupMenuButton<_MaterialSortOption>(
+                          tooltip: '排序方式',
+                          icon: const Icon(Icons.sort_rounded),
+                          onSelected: _handleSortOptionChanged,
+                          itemBuilder: (context) {
+                            return _MaterialSortOption.values
+                                .map(
+                                  (option) =>
+                                      CheckedPopupMenuItem<_MaterialSortOption>(
+                                    value: option,
+                                    checked: option == _sortOption,
+                                    child: Text(option.label),
+                                  ),
+                                )
+                                .toList(growable: false);
+                          },
+                        ),
                         IconButton(
                           onPressed: _isLoading ? null : _pickAndUploadFiles,
                           icon: const Icon(Icons.file_upload_outlined),

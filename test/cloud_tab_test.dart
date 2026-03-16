@@ -99,7 +99,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(deleteRequests, hasLength(1));
-    expect(deleteRequests.first, ['m1', 'm2']);
+    expect(deleteRequests.first, hasLength(2));
+    expect(deleteRequests.first, containsAll(<String>['m1', 'm2']));
   });
 
   testWidgets('supports selecting multiple items and moving them in batch', (
@@ -226,7 +227,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(moveRequests, hasLength(1));
-    expect(moveRequests.first['resIdList'], ['m1', 'm2']);
+    expect(moveRequests.first['resIdList'], hasLength(2));
+    expect(
+      moveRequests.first['resIdList'],
+      containsAll(<String>['m1', 'm2']),
+    );
     expect(moveRequests.first['targetFolderId'], 'f1');
   });
 
@@ -338,7 +343,99 @@ void main() {
     expect(createFolderRequests.first['parentFolderId'], '0');
 
     expect(moveRequests, hasLength(1));
-    expect(moveRequests.first['resIdList'], ['m1', 'm2']);
+    expect(moveRequests.first['resIdList'], hasLength(2));
+    expect(
+      moveRequests.first['resIdList'],
+      containsAll(<String>['m1', 'm2']),
+    );
     expect(moveRequests.first['targetFolderId'], 'f-new');
+  });
+
+  testWidgets('supports sorting materials by name, size and update time', (
+    WidgetTester tester,
+  ) async {
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm-b',
+                  'folderId': '0',
+                  'name': 'B.txt',
+                  'type': 'resource',
+                  'size': 200,
+                  'updatedAt': '2024-01-03T10:00:00Z',
+                },
+                {
+                  'id': 'm-c',
+                  'folderId': '0',
+                  'name': 'C.txt',
+                  'type': 'resource',
+                  'size': 300,
+                  'updatedAt': '2024-01-02T10:00:00Z',
+                },
+                {
+                  'id': 'm-a',
+                  'folderId': '0',
+                  'name': 'A.txt',
+                  'type': 'resource',
+                  'size': 100,
+                  'updatedAt': '2024-01-01T10:00:00Z',
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    double yOf(String fileName) {
+      return tester.getTopLeft(find.text(fileName)).dy;
+    }
+
+    expect(yOf('A.txt') < yOf('B.txt'), isTrue);
+    expect(yOf('B.txt') < yOf('C.txt'), isTrue);
+
+    await tester.tap(find.byTooltip('排序方式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('按大小（降序）'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(yOf('C.txt') < yOf('B.txt'), isTrue);
+    expect(yOf('B.txt') < yOf('A.txt'), isTrue);
+
+    await tester.tap(find.byTooltip('排序方式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('按修改日期（最新）'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(yOf('B.txt') < yOf('C.txt'), isTrue);
+    expect(yOf('C.txt') < yOf('A.txt'), isTrue);
   });
 }

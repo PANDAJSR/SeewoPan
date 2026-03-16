@@ -30,7 +30,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
 
       setState(() {
         _isLoading = false;
-        _materials = items;
+        _materials = _sortMaterials(items);
         _syncSelectionAfterReload(items);
       });
     } catch (error) {
