@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/models/drive_materials_capacity.dart';
 import '../../shared/models/user_profile.dart';
 import '../../shared/pinco_api_client.dart';
+
+part 'profile_tab_capacity.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({
@@ -28,14 +31,17 @@ class _ProfileTabState extends State<ProfileTab> {
 
   bool _cookieSaved = false;
   bool _isLoadingUserInfo = false;
+  bool _isLoadingCapacity = false;
   String? _error;
+  String? _capacityError;
   UserProfile? _profile;
+  DriveMaterialsCapacity? _capacity;
 
   @override
   void initState() {
     super.initState();
     _syncCookieFromProps();
-    _maybeAutoFetchUserInfo();
+    _maybeAutoFetchOverview();
   }
 
   @override
@@ -44,7 +50,8 @@ class _ProfileTabState extends State<ProfileTab> {
     if (oldWidget.initialCookie != widget.initialCookie) {
       _syncCookieFromProps();
       _resetProfile();
-      _maybeAutoFetchUserInfo();
+      _resetCapacity();
+      _maybeAutoFetchOverview();
     }
   }
 
@@ -70,9 +77,10 @@ class _ProfileTabState extends State<ProfileTab> {
       _cookieSaved = value.isNotEmpty;
       _error = null;
       _resetProfile();
+      _resetCapacity();
     });
 
-    _maybeAutoFetchUserInfo();
+    _maybeAutoFetchOverview();
   }
 
   Future<void> _fetchUserInfo({bool forceRefresh = false}) async {
@@ -120,8 +128,15 @@ class _ProfileTabState extends State<ProfileTab> {
     _profile = null;
   }
 
-  void _maybeAutoFetchUserInfo() {
-    if (_isLoadingUserInfo) {
+  Future<void> _fetchOverview({bool forceRefresh = false}) async {
+    await Future.wait<void>([
+      _fetchUserInfo(forceRefresh: forceRefresh),
+      _fetchCapacity(forceRefresh: forceRefresh),
+    ]);
+  }
+
+  void _maybeAutoFetchOverview() {
+    if (_isLoadingUserInfo || _isLoadingCapacity) {
       return;
     }
 
@@ -130,10 +145,13 @@ class _ProfileTabState extends State<ProfileTab> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _isLoadingUserInfo || _profile != null) {
+      if (!mounted || _isLoadingUserInfo || _isLoadingCapacity) {
         return;
       }
-      _fetchUserInfo();
+      if (_profile != null && _capacity != null) {
+        return;
+      }
+      _fetchOverview();
     });
   }
 
@@ -160,26 +178,36 @@ class _ProfileTabState extends State<ProfileTab> {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             const SizedBox(height: 16),
+            _CapacityCard(
+              capacity: _capacity,
+              isLoading: _isLoadingCapacity,
+              error: _capacityError,
+              segments: _buildUsageSegments(),
+            ),
+            const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed:
-                  hasCookie && !_isLoadingUserInfo
-                      ? () => _fetchUserInfo(forceRefresh: true)
-                      : null,
-              icon: _isLoadingUserInfo
+              onPressed: hasCookie && !_isLoadingUserInfo && !_isLoadingCapacity
+                  ? () => _fetchOverview(forceRefresh: true)
+                  : null,
+              icon: (_isLoadingUserInfo || _isLoadingCapacity)
                   ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.person_search_outlined),
-              label: Text(_isLoadingUserInfo ? '获取中...' : '获取用户信息'),
+              label: Text(
+                (_isLoadingUserInfo || _isLoadingCapacity)
+                    ? '获取中...'
+                    : '刷新资料与空间',
+              ),
             ),
             const SizedBox(height: 12),
             const Divider(height: 28),
             Text('Cookie 设置', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              '修改后请重新保存，再点击“获取用户信息”刷新上方资料。',
+              '修改后请重新保存，再点击“刷新资料与空间”更新上方信息。',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -192,10 +220,11 @@ class _ProfileTabState extends State<ProfileTab> {
                 hintText: '请输入 Cookie',
               ),
               onChanged: (_) {
-                if (_cookieSaved || _profile != null) {
+                if (_cookieSaved || _profile != null || _capacity != null) {
                   setState(() {
                     _cookieSaved = false;
                     _resetProfile();
+                    _resetCapacity();
                   });
                 }
               },
