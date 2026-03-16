@@ -209,41 +209,66 @@ class _StackedUsageBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    const flexBase = 10000;
-    final usedFlex = segments
-        .map((segment) => (segment.ratio * flexBase).round())
-        .fold<int>(0, (sum, value) => sum + value);
-    final remainingFlex = (flexBase - usedFlex).clamp(0, flexBase);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        key: const Key('capacity_stacked_bar'),
-        width: double.infinity,
-        height: 12,
-        child: Row(
-          children: [
-            ...segments.map((segment) {
-              final flex = (segment.ratio * flexBase).round();
-              if (flex <= 0) {
-                return const SizedBox.shrink();
-              }
-              return Expanded(
-                flex: flex,
-                child: ColoredBox(color: segment.color),
-              );
-            }),
-            if (remainingFlex > 0)
-              Expanded(
-                flex: remainingFlex,
-                child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-              ),
-          ],
+    return SizedBox(
+      key: const Key('capacity_stacked_bar'),
+      width: double.infinity,
+      height: 12,
+      child: CustomPaint(
+        painter: _StackedUsageBarPainter(
+          segments: segments,
+          backgroundColor:
+              Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
       ),
     );
+  }
+}
+
+class _StackedUsageBarPainter extends CustomPainter {
+  const _StackedUsageBarPainter({
+    required this.segments,
+    required this.backgroundColor,
+  });
+
+  final List<_UsageSegment> segments;
+  final Color backgroundColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = Radius.circular(size.height / 2);
+    final fullRect = Offset.zero & size;
+    final fullRRect = RRect.fromRectAndRadius(fullRect, radius);
+
+    final backgroundPaint = Paint()..color = backgroundColor;
+    canvas.drawRRect(fullRRect, backgroundPaint);
+
+    final clipPath = Path()..addRRect(fullRRect);
+    canvas.save();
+    canvas.clipPath(clipPath);
+
+    var startX = 0.0;
+    for (final segment in segments) {
+      final ratio = segment.ratio.clamp(0.0, 1.0);
+      final width = size.width * ratio;
+      if (width <= 0) {
+        continue;
+      }
+      final rect = Rect.fromLTWH(startX, 0, width, size.height);
+      final paint = Paint()..color = segment.color;
+      canvas.drawRect(rect, paint);
+      startX += width;
+      if (startX >= size.width) {
+        break;
+      }
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _StackedUsageBarPainter oldDelegate) {
+    return oldDelegate.segments != segments ||
+        oldDelegate.backgroundColor != backgroundColor;
   }
 }
 
