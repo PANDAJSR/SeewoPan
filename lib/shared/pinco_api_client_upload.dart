@@ -209,6 +209,7 @@ extension PincoApiClientUploadExtension on PincoApiClient {
             commitPayload['fileKey'].toString());
 
     _materialsCache.clear();
+    _materialsCapacityCache.clear();
 
     totalWatch.stop();
     reportProgress(progress: 1);

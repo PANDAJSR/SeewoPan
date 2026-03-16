@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../shared/models/drive_material.dart';
+import '../../shared/models/drive_materials_capacity.dart';
 import '../../shared/pinco_api_client.dart';
 import '../transfer/upload_task_manager.dart';
 
@@ -16,6 +17,7 @@ part 'cloud_tab_item_share.dart';
 part 'cloud_tab_dialogs_and_format.dart';
 part 'cloud_tab_selection.dart';
 part 'cloud_tab_sorting.dart';
+part 'cloud_tab_capacity.dart';
 
 class CloudTab extends StatefulWidget {
   const CloudTab({
@@ -41,8 +43,11 @@ class CloudTab extends StatefulWidget {
 
 class _CloudTabState extends State<CloudTab> {
   bool _isLoading = false;
+  bool _isLoadingCapacity = false;
   String? _error;
+  String? _capacityError;
   List<DriveMaterial> _materials = const [];
+  DriveMaterialsCapacity? _materialsCapacity;
   List<_FolderEntry> _folderPath = const [];
   final TextEditingController _searchController = TextEditingController();
   String _searchKeyword = '';
@@ -63,6 +68,8 @@ class _CloudTabState extends State<CloudTab> {
     if (oldWidget.cookie != widget.cookie) {
       _materials = const [];
       _error = null;
+      _materialsCapacity = null;
+      _capacityError = null;
       _folderPath = const [];
       _searchKeyword = '';
       _searchController.clear();
@@ -151,7 +158,7 @@ class _CloudTabState extends State<CloudTab> {
         child: Stack(
           children: [
             RefreshIndicator(
-              onRefresh: () => _loadMaterials(forceRefresh: true),
+              onRefresh: () => _refreshAll(forceRefresh: true),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
@@ -236,7 +243,7 @@ class _CloudTabState extends State<CloudTab> {
                       IconButton(
                         onPressed: _isLoading
                             ? null
-                            : () => _loadMaterials(forceRefresh: true),
+                            : () => _refreshAll(forceRefresh: true),
                         icon: _isLoading
                             ? const SizedBox(
                                 width: 16,
@@ -249,6 +256,8 @@ class _CloudTabState extends State<CloudTab> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  _buildCapacitySection(context),
                   const SizedBox(height: 8),
                   _buildFolderPath(context),
                   const SizedBox(height: 8),

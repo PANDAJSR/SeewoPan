@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 
 import 'models/drive_material.dart';
+import 'models/drive_materials_capacity.dart';
 import 'models/user_profile.dart';
 
 part 'pinco_api_client_materials.dart';
@@ -111,6 +112,8 @@ class PincoApiClient {
   final Map<String, UserProfile> _userProfileCache = <String, UserProfile>{};
   final Map<String, List<DriveMaterial>> _materialsCache =
       <String, List<DriveMaterial>>{};
+  final Map<String, DriveMaterialsCapacity> _materialsCapacityCache =
+      <String, DriveMaterialsCapacity>{};
 }
 
 class _NormalizedUploadPolicy {

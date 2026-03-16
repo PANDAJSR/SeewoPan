@@ -13,6 +13,35 @@ class DriveLinkShareResult {
 }
 
 extension PincoApiClientMaterialsExtension on PincoApiClient {
+  Future<DriveMaterialsCapacity> getDriveMaterialsCapacity({
+    required String cookie,
+    int type = 1,
+    bool forceRefresh = false,
+  }) async {
+    final normalizedCookie = cookie.trim();
+    final cacheKey = '$normalizedCookie::$type';
+    if (!forceRefresh) {
+      final cached = _materialsCapacityCache[cacheKey];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
+    final data = await _postAction(
+      actionName: 'GetV1DriveMaterialsCapacity',
+      cookie: normalizedCookie,
+      payload: <String, dynamic>{'type': type},
+    );
+
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('Missing drive materials capacity data.');
+    }
+
+    final capacity = DriveMaterialsCapacity.fromApi(data);
+    _materialsCapacityCache[cacheKey] = capacity;
+    return capacity;
+  }
+
   Future<UserProfile> getUserInfo(
     String cookie, {
     bool forceRefresh = false,
@@ -140,6 +169,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     }
 
     _materialsCache.clear();
+    _materialsCapacityCache.clear();
   }
 
   Future<void> deleteMaterials({
@@ -170,6 +200,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     );
 
     _materialsCache.clear();
+    _materialsCapacityCache.clear();
   }
 
   Future<void> moveMaterials({
@@ -212,6 +243,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     );
 
     _materialsCache.clear();
+    _materialsCapacityCache.clear();
   }
 
   Future<String> createFolder({
@@ -257,6 +289,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     }
 
     _materialsCache.clear();
+    _materialsCapacityCache.clear();
     return folderId;
   }
 

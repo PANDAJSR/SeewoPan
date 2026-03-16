@@ -7,7 +7,14 @@ extension _CloudTabLoadingExtension on _CloudTabState {
     if (widget.isLoadingCookie || widget.cookie.trim().isEmpty || _isLoading) {
       return;
     }
-    await _loadMaterials();
+    await _refreshAll();
+  }
+
+  Future<void> _refreshAll({bool forceRefresh = false}) async {
+    await Future.wait<void>([
+      _loadMaterials(forceRefresh: forceRefresh),
+      _loadMaterialsCapacity(forceRefresh: forceRefresh),
+    ]);
   }
 
   Future<void> _loadMaterials({bool forceRefresh = false}) async {
@@ -42,6 +49,38 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       setState(() {
         _isLoading = false;
         _error = '加载文件列表失败：$error';
+      });
+    }
+  }
+
+  Future<void> _loadMaterialsCapacity({bool forceRefresh = false}) async {
+    setState(() {
+      _isLoadingCapacity = true;
+      _capacityError = null;
+    });
+
+    try {
+      final capacity = await widget.apiClient.getDriveMaterialsCapacity(
+        cookie: widget.cookie.trim(),
+        forceRefresh: forceRefresh,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingCapacity = false;
+        _materialsCapacity = capacity;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingCapacity = false;
+        _capacityError = '加载空间占用失败：$error';
       });
     }
   }

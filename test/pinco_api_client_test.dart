@@ -73,6 +73,65 @@ void main() {
     expect(sentKeywords, <String>['鸿合', '试卷']);
   });
 
+  test('getDriveMaterialsCapacity should parse response and cache by type',
+      () async {
+    var capacityCallCount = 0;
+    final sentTypes = <int>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterialsCapacity') {
+        capacityCallCount += 1;
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        sentTypes.add(payload['type'] as int);
+
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'capacity': 80302047232,
+              'used': 3534613292,
+              'usedDetail': [
+                {
+                  'appCode': 'EN',
+                  'appName': '白板',
+                  'totalUsed': 3066919338,
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+
+    final first = await client.getDriveMaterialsCapacity(
+      cookie: 'token=abc',
+      type: 1,
+    );
+    final second = await client.getDriveMaterialsCapacity(
+      cookie: 'token=abc',
+      type: 1,
+    );
+    await client.getDriveMaterialsCapacity(
+      cookie: 'token=abc',
+      type: 2,
+    );
+
+    expect(first.capacity, 80302047232);
+    expect(first.used, 3534613292);
+    expect(first.usedDetail, hasLength(1));
+    expect(first.usedDetail.first.displayName, '白板');
+    expect(identical(first, second), isTrue);
+    expect(capacityCallCount, 2);
+    expect(sentTypes, <int>[1, 2]);
+  });
+
   test('renameMaterial should call rename action and clear cache', () async {
     var listCallCount = 0;
     final mockClient = MockClient((request) async {
