@@ -80,20 +80,33 @@ class UploadTaskItem {
   }
 }
 
-class UploadTaskManager extends ChangeNotifier {
-  UploadTaskManager({required PincoApiClient apiClient})
-      : _apiClient = apiClient;
+typedef UploadFileHandler = Future<UploadFileResult> Function({
+  required String cookie,
+  required Uint8List bytes,
+  required String fileName,
+  String parentFolderId,
+  String? mimeType,
+  UploadProgressCallback? onProgress,
+});
 
-  final PincoApiClient _apiClient;
+class UploadTaskManager extends ChangeNotifier {
+  UploadTaskManager({
+    required PincoApiClient apiClient,
+    UploadFileHandler? uploadFileHandler,
+  }) : _uploadFileHandler = uploadFileHandler ?? apiClient.uploadFileBytes;
+  final UploadFileHandler _uploadFileHandler;
   final List<UploadTaskItem> _tasks = <UploadTaskItem>[];
   final Map<String, UploadSourceFile> _sourceByTaskId =
       <String, UploadSourceFile>{};
   final Random _random = Random();
 
   String _cookie = '';
-  bool _running = false;
+  bool _isDispatching = false;
+  int _runningUploads = 0;
+  int _maxConcurrentUploads = 3;
 
   List<UploadTaskItem> get tasks => List<UploadTaskItem>.unmodifiable(_tasks);
+  int get maxConcurrentUploads => _maxConcurrentUploads;
 
   List<UploadTaskItem> get activeTasks => _tasks
       .where((task) =>
@@ -103,6 +116,16 @@ class UploadTaskManager extends ChangeNotifier {
 
   void updateCookie(String value) {
     _cookie = value.trim();
+  }
+
+  void updateMaxConcurrentUploads(int value) {
+    final normalized = value.clamp(1, 10);
+    if (normalized == _maxConcurrentUploads) {
+      return;
+    }
+    _maxConcurrentUploads = normalized;
+    notifyListeners();
+    unawaited(_runQueue());
   }
 
   Future<void> enqueueFiles(List<UploadSourceFile> files) async {
@@ -135,22 +158,24 @@ class UploadTaskManager extends ChangeNotifier {
   }
 
   Future<void> _runQueue() async {
-    if (_running) {
+    if (_isDispatching) {
       return;
     }
-    _running = true;
+    _isDispatching = true;
 
     try {
-      for (var i = 0; i < _tasks.length; i++) {
-        final task = _tasks[i];
-        if (task.status != UploadTaskStatus.queued) {
-          continue;
+      while (_runningUploads < _maxConcurrentUploads) {
+        final index = _tasks.indexWhere(
+          (task) => task.status == UploadTaskStatus.queued,
+        );
+        if (index < 0) {
+          break;
         }
 
+        final task = _tasks[index];
         final source = _sourceByTaskId[task.id];
-
         if (source == null || source.bytes.isEmpty) {
-          _tasks[i] = task.copyWith(
+          _tasks[index] = task.copyWith(
             status: UploadTaskStatus.failed,
             errorMessage: '文件数据已失效，请重新选择文件。',
           );
@@ -160,7 +185,7 @@ class UploadTaskManager extends ChangeNotifier {
         }
 
         if (_cookie.isEmpty) {
-          _tasks[i] = task.copyWith(
+          _tasks[index] = task.copyWith(
             status: UploadTaskStatus.failed,
             errorMessage: '未设置 Cookie，请先到“我的”保存 Cookie。',
           );
@@ -168,62 +193,72 @@ class UploadTaskManager extends ChangeNotifier {
           continue;
         }
 
-        _tasks[i] = task.copyWith(
+        _tasks[index] = task.copyWith(
           status: UploadTaskStatus.uploading,
           clearError: true,
         );
+        _runningUploads += 1;
         notifyListeners();
-
-        try {
-          final result = await _apiClient.uploadFileBytes(
-            cookie: _cookie,
-            bytes: source.bytes,
-            fileName: source.name,
-            parentFolderId: source.parentFolderId,
-            onProgress: (progress) {
-              final index = _tasks.indexWhere((item) => item.id == task.id);
-              if (index < 0) {
-                return;
-              }
-              _tasks[index] = _tasks[index].copyWith(
-                status: UploadTaskStatus.uploading,
-                progress: progress.progress.clamp(0.0, 0.99),
-                speedBps: progress.speedBps,
-                uploadedBytes: progress.sentBytes,
-                totalBytes: progress.totalBytes,
-              );
-              notifyListeners();
-            },
-          );
-
-          final index = _tasks.indexWhere((item) => item.id == task.id);
-          if (index >= 0) {
-            _tasks[index] = _tasks[index].copyWith(
-              status: UploadTaskStatus.success,
-              progress: 1,
-              speedBps: result.metrics.uploadSpeedBps,
-              uploadedBytes: result.size,
-              totalBytes: result.size,
-              downloadUrl: result.downloadUrl,
-              errorMessage: null,
-            );
-            _sourceByTaskId.remove(task.id);
-            notifyListeners();
-          }
-        } catch (error) {
-          final index = _tasks.indexWhere((item) => item.id == task.id);
-          if (index >= 0) {
-            _tasks[index] = _tasks[index].copyWith(
-              status: UploadTaskStatus.failed,
-              errorMessage: '$error',
-            );
-            _sourceByTaskId.remove(task.id);
-            notifyListeners();
-          }
-        }
+        unawaited(_startUpload(taskId: task.id, source: source));
       }
     } finally {
-      _running = false;
+      _isDispatching = false;
+    }
+  }
+
+  Future<void> _startUpload({
+    required String taskId,
+    required UploadSourceFile source,
+  }) async {
+    try {
+      final result = await _uploadFileHandler(
+        cookie: _cookie,
+        bytes: source.bytes,
+        fileName: source.name,
+        parentFolderId: source.parentFolderId,
+        onProgress: (progress) {
+          final index = _tasks.indexWhere((item) => item.id == taskId);
+          if (index < 0) {
+            return;
+          }
+          _tasks[index] = _tasks[index].copyWith(
+            status: UploadTaskStatus.uploading,
+            progress: progress.progress.clamp(0.0, 0.99),
+            speedBps: progress.speedBps,
+            uploadedBytes: progress.sentBytes,
+            totalBytes: progress.totalBytes,
+          );
+          notifyListeners();
+        },
+      );
+
+      final index = _tasks.indexWhere((item) => item.id == taskId);
+      if (index >= 0) {
+        _tasks[index] = _tasks[index].copyWith(
+          status: UploadTaskStatus.success,
+          progress: 1,
+          speedBps: result.metrics.uploadSpeedBps,
+          uploadedBytes: result.size,
+          totalBytes: result.size,
+          downloadUrl: result.downloadUrl,
+          errorMessage: null,
+        );
+        _sourceByTaskId.remove(taskId);
+        notifyListeners();
+      }
+    } catch (error) {
+      final index = _tasks.indexWhere((item) => item.id == taskId);
+      if (index >= 0) {
+        _tasks[index] = _tasks[index].copyWith(
+          status: UploadTaskStatus.failed,
+          errorMessage: '$error',
+        );
+        _sourceByTaskId.remove(taskId);
+        notifyListeners();
+      }
+    } finally {
+      _runningUploads = max(0, _runningUploads - 1);
+      unawaited(_runQueue());
     }
   }
 

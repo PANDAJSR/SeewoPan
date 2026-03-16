@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/cloud/cloud_tab.dart';
 import '../features/profile/profile_tab.dart';
+import '../features/settings/settings_tab.dart';
 import '../features/transfer/transfer_tab.dart';
 import '../features/transfer/upload_task_manager.dart';
 import '../shared/pinco_api_client.dart';
@@ -16,6 +17,8 @@ class HomeShellPage extends StatefulWidget {
 
 class _HomeShellPageState extends State<HomeShellPage> {
   static const _cookieStorageKey = 'seewopan.cookie';
+  static const _maxConcurrentUploadsStorageKey =
+      'seewopan.max_concurrent_uploads';
   static const List<_NavItem> _items = [
     _NavItem(
         label: '云盘', icon: Icons.cloud_outlined, selectedIcon: Icons.cloud),
@@ -26,6 +29,11 @@ class _HomeShellPageState extends State<HomeShellPage> {
     ),
     _NavItem(
         label: '我的', icon: Icons.person_outline, selectedIcon: Icons.person),
+    _NavItem(
+      label: '设置',
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+    ),
   ];
 
   final PincoApiClient _apiClient = PincoApiClient();
@@ -36,11 +44,12 @@ class _HomeShellPageState extends State<HomeShellPage> {
   bool _isLoadingCookie = true;
   bool _isSavingCookie = false;
   String _cookie = '';
+  int _maxConcurrentUploads = 3;
 
   @override
   void initState() {
     super.initState();
-    _loadCookie();
+    _loadLocalSettings();
   }
 
   @override
@@ -123,14 +132,21 @@ class _HomeShellPageState extends State<HomeShellPage> {
           onSaveCookie: _saveCookie,
           apiClient: _apiClient,
         );
+      case 3:
+        return SettingsTab(
+          maxConcurrentUploads: _maxConcurrentUploads,
+          onMaxConcurrentUploadsChanged: _saveMaxConcurrentUploads,
+        );
       default:
         return const SizedBox.shrink();
     }
   }
 
-  Future<void> _loadCookie() async {
+  Future<void> _loadLocalSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final cookie = prefs.getString(_cookieStorageKey) ?? '';
+    final maxConcurrentUploads = prefs.getInt(_maxConcurrentUploadsStorageKey);
+    final normalizedUploads = (maxConcurrentUploads ?? 3).clamp(1, 10);
 
     if (!mounted) {
       return;
@@ -138,9 +154,11 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
     setState(() {
       _cookie = cookie;
+      _maxConcurrentUploads = normalizedUploads;
       _isLoadingCookie = false;
     });
     _uploadTaskManager.updateCookie(cookie);
+    _uploadTaskManager.updateMaxConcurrentUploads(normalizedUploads);
   }
 
   Future<void> _saveCookie(String value) async {
@@ -160,6 +178,21 @@ class _HomeShellPageState extends State<HomeShellPage> {
       _isSavingCookie = false;
     });
     _uploadTaskManager.updateCookie(value);
+  }
+
+  Future<void> _saveMaxConcurrentUploads(int value) async {
+    final normalized = value.clamp(1, 10);
+    if (normalized == _maxConcurrentUploads) {
+      return;
+    }
+
+    setState(() {
+      _maxConcurrentUploads = normalized;
+    });
+    _uploadTaskManager.updateMaxConcurrentUploads(normalized);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_maxConcurrentUploadsStorageKey, normalized);
   }
 }
 
