@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 class SettingsTab extends StatelessWidget {
   const SettingsTab({
     super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
     required this.maxConcurrentUploads,
     required this.onMaxConcurrentUploadsChanged,
   });
 
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
   final int maxConcurrentUploads;
   final ValueChanged<int> onMaxConcurrentUploadsChanged;
 
@@ -19,6 +23,54 @@ class SettingsTab extends StatelessWidget {
           Text(
             '设置',
             style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Text(
+                      '主题模式',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  RadioListTile<ThemeMode>(
+                    title: const Text('跟随系统（默认）'),
+                    value: ThemeMode.system,
+                    groupValue: themeMode,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onThemeModeChanged(value);
+                      }
+                    },
+                  ),
+                  RadioListTile<ThemeMode>(
+                    title: const Text('浅色模式'),
+                    value: ThemeMode.light,
+                    groupValue: themeMode,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onThemeModeChanged(value);
+                      }
+                    },
+                  ),
+                  RadioListTile<ThemeMode>(
+                    title: const Text('深色模式'),
+                    value: ThemeMode.dark,
+                    groupValue: themeMode,
+                    onChanged: (value) {
+                      if (value != null) {
+                        onThemeModeChanged(value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           Card(

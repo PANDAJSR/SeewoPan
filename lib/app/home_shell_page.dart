@@ -9,7 +9,14 @@ import '../features/transfer/upload_task_manager.dart';
 import '../shared/pinco_api_client.dart';
 
 class HomeShellPage extends StatefulWidget {
-  const HomeShellPage({super.key});
+  const HomeShellPage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
+
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
@@ -134,6 +141,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
         );
       case 3:
         return SettingsTab(
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
           maxConcurrentUploads: _maxConcurrentUploads,
           onMaxConcurrentUploadsChanged: _saveMaxConcurrentUploads,
         );
