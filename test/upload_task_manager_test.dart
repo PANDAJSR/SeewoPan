@@ -142,6 +142,80 @@ void main() {
 
     expect(maxObservedActive, 2);
   });
+
+  test('aggregates speed across all uploading tasks', () async {
+    final releaseUploads = Completer<void>();
+    final manager = UploadTaskManager(
+      apiClient: PincoApiClient(),
+      uploadFileHandler: ({
+        required String cookie,
+        required Uint8List bytes,
+        required String fileName,
+        String parentFolderId = '0',
+        String? mimeType,
+        UploadProgressCallback? onProgress,
+      }) async {
+        final elapsed = fileName == 'a.bin'
+            ? const Duration(milliseconds: 500)
+            : const Duration(milliseconds: 250);
+        onProgress?.call(
+          UploadProgress(
+            sentBytes: 256,
+            totalBytes: bytes.length,
+            elapsed: elapsed,
+            estimatedProgress: 0.5,
+          ),
+        );
+        await releaseUploads.future;
+        return UploadFileResult(
+          deduplicated: false,
+          name: fileName,
+          size: bytes.length,
+          mimeType: 'application/octet-stream',
+          fileMd5: 'md5',
+          fileKey: 'file-key',
+          downloadUrl: 'https://example.com/$fileName',
+          metrics: UploadMetrics(
+            fileSizeBytes: bytes.length,
+            totalElapsed: const Duration(seconds: 1),
+            uploadElapsed: const Duration(seconds: 1),
+            uploadSpeedBps: 0,
+          ),
+        );
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    manager.updateMaxConcurrentUploads(2);
+    await manager.enqueueFiles([
+      UploadSourceFile(
+        name: 'a.bin',
+        bytes: Uint8List.fromList(List<int>.filled(512, 1)),
+        parentFolderId: '0',
+      ),
+      UploadSourceFile(
+        name: 'b.bin',
+        bytes: Uint8List.fromList(List<int>.filled(512, 1)),
+        parentFolderId: '0',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      final uploading = manager.tasks
+          .where((task) => task.status == UploadTaskStatus.uploading)
+          .toList(growable: false);
+      return uploading.length == 2 &&
+          uploading.every((task) => task.speedBps > 0);
+    });
+
+    expect(manager.totalUploadingSpeedBps, closeTo(1536.0, 0.001));
+
+    releaseUploads.complete();
+    await _waitUntil(() {
+      return manager.tasks
+          .every((task) => task.status == UploadTaskStatus.success);
+    });
+  });
 }
 
 Future<void> _waitUntil(

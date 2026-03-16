@@ -28,7 +28,9 @@ class TransferTab extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                active.isEmpty ? '当前没有进行中的上传任务' : '进行中：${active.length} 个任务',
+                active.isEmpty
+                    ? '当前没有进行中的上传任务'
+                    : '进行中：${active.length} 个任务 · 总上传速度：${_formatSpeed(taskManager.totalUploadingSpeedBps)}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
@@ -110,28 +112,28 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _formatSpeed(double bytesPerSecond) {
-    if (bytesPerSecond <= 0) {
-      return '0 B/s';
-    }
-    return '${_formatBytes(bytesPerSecond.round())}/s';
+String _formatSpeed(double bytesPerSecond) {
+  if (bytesPerSecond <= 0) {
+    return '0 B/s';
+  }
+  return '${_formatBytes(bytesPerSecond.round())}/s';
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) {
-      return '$bytes B';
-    }
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  double value = bytes / 1024;
+  var unitIndex = 0;
 
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    double value = bytes / 1024;
-    var unitIndex = 0;
-
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-
-    return '${value.toStringAsFixed(2)} ${units[unitIndex]}';
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
   }
+
+  return '${value.toStringAsFixed(2)} ${units[unitIndex]}';
 }

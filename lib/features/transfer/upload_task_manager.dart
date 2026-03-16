@@ -113,6 +113,9 @@ class UploadTaskManager extends ChangeNotifier {
           task.status == UploadTaskStatus.queued ||
           task.status == UploadTaskStatus.uploading)
       .toList(growable: false);
+  double get totalUploadingSpeedBps => _tasks
+      .where((task) => task.status == UploadTaskStatus.uploading)
+      .fold(0.0, (sum, task) => sum + task.speedBps);
 
   void updateCookie(String value) {
     _cookie = value.trim();
