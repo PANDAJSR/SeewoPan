@@ -29,6 +29,8 @@ class ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<ProfileTab> {
   final TextEditingController _cookieController = TextEditingController();
 
+  bool _showCookieEditor = false;
+  bool _isCookieObscured = true;
   bool _cookieSaved = false;
   bool _isLoadingUserInfo = false;
   bool _isLoadingCapacity = false;
@@ -207,41 +209,24 @@ class _ProfileTabState extends State<ProfileTab> {
             Text('Cookie 设置', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              '修改后请重新保存，再点击“刷新资料与空间”更新上方信息。',
+              '默认不展示 Cookie 输入框，点击“设置 Cookie”后再编辑并保存。',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _cookieController,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: '请输入 Cookie',
-              ),
-              onChanged: (_) {
-                if (_cookieSaved || _profile != null || _capacity != null) {
-                  setState(() {
-                    _cookieSaved = false;
-                    _resetProfile();
-                    _resetCapacity();
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 20),
             Row(
               children: [
-                FilledButton.icon(
-                  onPressed: widget.isSavingCookie ? null : _saveCookie,
-                  icon: widget.isSavingCookie
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: Text(widget.isSavingCookie ? '保存中...' : '保存 Cookie'),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showCookieEditor = !_showCookieEditor;
+                    });
+                  },
+                  icon: Icon(
+                    _showCookieEditor
+                        ? Icons.keyboard_arrow_up
+                        : Icons.edit_outlined,
+                  ),
+                  label: Text(_showCookieEditor ? '收起 Cookie 设置' : '设置 Cookie'),
                 ),
                 const SizedBox(width: 12),
                 if (_cookieSaved)
@@ -253,6 +238,52 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
               ],
             ),
+            if (_showCookieEditor) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _cookieController,
+                obscureText: _isCookieObscured,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: '请输入 Cookie',
+                  suffixIcon: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _isCookieObscured = !_isCookieObscured;
+                      });
+                    },
+                    icon: Icon(
+                      _isCookieObscured
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    tooltip: _isCookieObscured ? '显示 Cookie' : '隐藏 Cookie',
+                  ),
+                ),
+                onChanged: (_) {
+                  if (_cookieSaved || _profile != null || _capacity != null) {
+                    setState(() {
+                      _cookieSaved = false;
+                      _resetProfile();
+                      _resetCapacity();
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: widget.isSavingCookie ? null : _saveCookie,
+                icon: widget.isSavingCookie
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(widget.isSavingCookie ? '保存中...' : '保存 Cookie'),
+              ),
+            ],
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
