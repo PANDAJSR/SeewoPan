@@ -19,6 +19,60 @@ void main() {
     );
   });
 
+  test('getMaterials should send keyword and cache by keyword', () async {
+    var listCallCount = 0;
+    final sentKeywords = <String>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        listCallCount += 1;
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        sentKeywords.add(payload['keyword']?.toString() ?? '');
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': 'keyword-test.txt',
+                  'type': 'resource',
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+
+    await client.getMaterials(
+      cookie: 'token=abc',
+      folderId: '0',
+      keyword: '鸿合',
+    );
+    await client.getMaterials(
+      cookie: 'token=abc',
+      folderId: '0',
+      keyword: '鸿合',
+    );
+    await client.getMaterials(
+      cookie: 'token=abc',
+      folderId: '0',
+      keyword: '试卷',
+    );
+
+    expect(listCallCount, 2);
+    expect(sentKeywords, <String>['鸿合', '试卷']);
+  });
+
   test('renameMaterial should call rename action and clear cache', () async {
     var listCallCount = 0;
     final mockClient = MockClient((request) async {

@@ -351,6 +351,87 @@ void main() {
     expect(moveRequests.first['targetFolderId'], 'f-new');
   });
 
+  testWidgets('supports searching materials by keyword', (
+    WidgetTester tester,
+  ) async {
+    final requestedKeywords = <String>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        final keyword = payload['keyword']?.toString() ?? '';
+        requestedKeywords.add(keyword);
+        final list = keyword == '数学'
+            ? [
+                {
+                  'id': 'm2',
+                  'folderId': '0',
+                  'name': '数学课件.pdf',
+                  'type': 'resource',
+                  'size': 4567,
+                },
+              ]
+            : [
+                {
+                  'id': 'm1',
+                  'folderId': '0',
+                  'name': '语文课件.pdf',
+                  'type': 'resource',
+                  'size': 1234,
+                },
+                {
+                  'id': 'm2',
+                  'folderId': '0',
+                  'name': '数学课件.pdf',
+                  'type': 'resource',
+                  'size': 4567,
+                },
+              ];
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': list,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('语文课件.pdf'), findsOneWidget);
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '数学');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.text('数学课件.pdf'), findsOneWidget);
+    expect(find.text('语文课件.pdf'), findsNothing);
+    expect(requestedKeywords, containsAllInOrder(<String>['', '数学']));
+  });
+
   testWidgets('supports sorting materials by name, size and update time', (
     WidgetTester tester,
   ) async {

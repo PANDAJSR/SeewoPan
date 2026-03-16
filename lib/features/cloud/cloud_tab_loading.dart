@@ -21,6 +21,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       final items = await widget.apiClient.getMaterials(
         cookie: widget.cookie.trim(),
         folderId: folderId,
+        keyword: _searchKeyword,
         forceRefresh: forceRefresh,
       );
 

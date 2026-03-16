@@ -42,6 +42,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
 
   Future<List<DriveMaterial>> getRootMaterials({
     required String cookie,
+    String keyword = '',
     int page = 0,
     int size = 50,
     bool forceRefresh = false,
@@ -49,6 +50,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
     return getMaterials(
       cookie: cookie,
       folderId: '0',
+      keyword: keyword,
       page: page,
       size: size,
       forceRefresh: forceRefresh,
@@ -58,13 +60,16 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
   Future<List<DriveMaterial>> getMaterials({
     required String cookie,
     required String folderId,
+    String keyword = '',
     int page = 0,
     int size = 50,
     String tagName = 'resource,folder',
     bool forceRefresh = false,
   }) async {
     final normalizedCookie = cookie.trim();
-    final cacheKey = '$normalizedCookie::$folderId::$page::$size::$tagName';
+    final normalizedKeyword = keyword.trim();
+    final cacheKey =
+        '$normalizedCookie::$folderId::$page::$size::$tagName::$normalizedKeyword';
     if (!forceRefresh) {
       final cached = _materialsCache[cacheKey];
       if (cached != null) {
@@ -76,7 +81,7 @@ extension PincoApiClientMaterialsExtension on PincoApiClient {
       actionName: 'GetV1DriveMaterials',
       cookie: normalizedCookie,
       payload: <String, dynamic>{
-        'keyword': '',
+        'keyword': normalizedKeyword,
         'size': size,
         'tagName': tagName,
         'page': page,

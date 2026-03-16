@@ -44,6 +44,8 @@ class _CloudTabState extends State<CloudTab> {
   String? _error;
   List<DriveMaterial> _materials = const [];
   List<_FolderEntry> _folderPath = const [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchKeyword = '';
   bool _isSelectionMode = false;
   Set<String> _selectedMaterialIds = <String>{};
   bool _isDragHovering = false;
@@ -62,10 +64,46 @@ class _CloudTabState extends State<CloudTab> {
       _materials = const [];
       _error = null;
       _folderPath = const [];
+      _searchKeyword = '';
+      _searchController.clear();
       _isSelectionMode = false;
       _selectedMaterialIds = <String>{};
       _tryLoadIfReady();
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applySearch() async {
+    final normalizedKeyword = _searchController.text.trim();
+    if (_searchKeyword == normalizedKeyword && _error == null) {
+      return;
+    }
+
+    setState(() {
+      _searchKeyword = normalizedKeyword;
+      _isSelectionMode = false;
+      _selectedMaterialIds = <String>{};
+    });
+    await _loadMaterials(forceRefresh: true);
+  }
+
+  Future<void> _clearSearch() async {
+    if (_searchKeyword.isEmpty && _searchController.text.trim().isEmpty) {
+      return;
+    }
+
+    _searchController.clear();
+    setState(() {
+      _searchKeyword = '';
+      _isSelectionMode = false;
+      _selectedMaterialIds = <String>{};
+    });
+    await _loadMaterials(forceRefresh: true);
   }
 
   @override
@@ -214,6 +252,40 @@ class _CloudTabState extends State<CloudTab> {
                   const SizedBox(height: 8),
                   _buildFolderPath(context),
                   const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          textInputAction: TextInputAction.search,
+                          enabled: !_isLoading,
+                          onChanged: (_) => setState(() {}),
+                          onSubmitted: (_) => _applySearch(),
+                          decoration: InputDecoration(
+                            hintText: '搜索当前目录文件',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchKeyword.isEmpty &&
+                                    _searchController.text.trim().isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: _isLoading ? null : _clearSearch,
+                                    tooltip: '清空搜索',
+                                    icon: const Icon(Icons.clear_rounded),
+                                  ),
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonalIcon(
+                        onPressed: _isLoading ? null : _applySearch,
+                        icon: const Icon(Icons.search),
+                        label: const Text('搜索'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -225,9 +297,13 @@ class _CloudTabState extends State<CloudTab> {
                       ),
                     ),
                   if (!_isLoading && _materials.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 48),
-                      child: Center(child: Text('当前目录暂无文件。')),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 48),
+                      child: Center(
+                        child: Text(
+                          _searchKeyword.isEmpty ? '当前目录暂无文件。' : '未找到匹配文件。',
+                        ),
+                      ),
                     ),
                   ..._materials.map(
                     (item) => Card(
