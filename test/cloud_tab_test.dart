@@ -423,6 +423,9 @@ void main() {
     expect(find.text('语文课件.pdf'), findsOneWidget);
     expect(find.text('数学课件.pdf'), findsOneWidget);
 
+    await tester.tap(find.byTooltip('搜索'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(find.byType(TextField), '数学');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();

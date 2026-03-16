@@ -46,6 +46,7 @@ class _CloudTabState extends State<CloudTab> {
   List<_FolderEntry> _folderPath = const [];
   final TextEditingController _searchController = TextEditingController();
   String _searchKeyword = '';
+  bool _isSearchBarVisible = false;
   bool _isSelectionMode = false;
   Set<String> _selectedMaterialIds = <String>{};
   bool _isDragHovering = false;
@@ -66,6 +67,7 @@ class _CloudTabState extends State<CloudTab> {
       _folderPath = const [];
       _searchKeyword = '';
       _searchController.clear();
+      _isSearchBarVisible = false;
       _isSelectionMode = false;
       _selectedMaterialIds = <String>{};
       _tryLoadIfReady();
@@ -221,6 +223,19 @@ class _CloudTabState extends State<CloudTab> {
                         ),
                       ],
                       IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _isSearchBarVisible = !_isSearchBarVisible;
+                          });
+                        },
+                        icon: Icon(
+                          _isSearchBarVisible
+                              ? Icons.search_off_rounded
+                              : Icons.search_rounded,
+                        ),
+                        tooltip: _isSearchBarVisible ? '收起搜索' : '搜索',
+                      ),
+                      IconButton(
                         onPressed: _isLoading || _materials.isEmpty
                             ? null
                             : (_isSelectionMode
@@ -252,40 +267,43 @@ class _CloudTabState extends State<CloudTab> {
                   const SizedBox(height: 8),
                   _buildFolderPath(context),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          textInputAction: TextInputAction.search,
-                          enabled: !_isLoading,
-                          onChanged: (_) => setState(() {}),
-                          onSubmitted: (_) => _applySearch(),
-                          decoration: InputDecoration(
-                            hintText: '搜索当前目录文件',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchKeyword.isEmpty &&
-                                    _searchController.text.trim().isEmpty
-                                ? null
-                                : IconButton(
-                                    onPressed: _isLoading ? null : _clearSearch,
-                                    tooltip: '清空搜索',
-                                    icon: const Icon(Icons.clear_rounded),
-                                  ),
-                            border: const OutlineInputBorder(),
-                            isDense: true,
+                  if (_isSearchBarVisible) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            textInputAction: TextInputAction.search,
+                            enabled: !_isLoading,
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) => _applySearch(),
+                            decoration: InputDecoration(
+                              hintText: '搜索当前目录文件',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: _searchKeyword.isEmpty &&
+                                      _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      onPressed:
+                                          _isLoading ? null : _clearSearch,
+                                      tooltip: '清空搜索',
+                                      icon: const Icon(Icons.clear_rounded),
+                                    ),
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.tonalIcon(
-                        onPressed: _isLoading ? null : _applySearch,
-                        icon: const Icon(Icons.search),
-                        label: const Text('搜索'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
+                        const SizedBox(width: 8),
+                        FilledButton.tonalIcon(
+                          onPressed: _isLoading ? null : _applySearch,
+                          icon: const Icon(Icons.search),
+                          label: const Text('搜索'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
