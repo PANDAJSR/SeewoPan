@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -177,11 +179,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
         prefs.getInt(_maxConcurrentDownloadsStorageKey);
     final storedDownloadDirectory =
         prefs.getString(_downloadDirectoryStorageKey)?.trim() ?? '';
-    final defaultDownloadDirectory =
-        await resolveDefaultDownloadDirectoryPath();
-    final normalizedDownloadDirectory = storedDownloadDirectory.isNotEmpty
-        ? storedDownloadDirectory
-        : defaultDownloadDirectory;
+    final normalizedDownloadDirectory = storedDownloadDirectory;
     final normalizedUploads = (maxConcurrentUploads ?? 3).clamp(1, 10);
     final normalizedDownloads = (maxConcurrentDownloads ?? 3).clamp(1, 10);
 
@@ -201,6 +199,22 @@ class _HomeShellPageState extends State<HomeShellPage> {
     _downloadTaskManager.updateCookie(cookie);
     _downloadTaskManager.updateMaxConcurrentDownloads(normalizedDownloads);
     _downloadTaskManager.updateDownloadDirectory(normalizedDownloadDirectory);
+
+    if (storedDownloadDirectory.isEmpty) {
+      unawaited(_initializeDefaultDownloadDirectory());
+    }
+  }
+
+  Future<void> _initializeDefaultDownloadDirectory() async {
+    final defaultDownloadDirectory =
+        await resolveDefaultDownloadDirectoryPath();
+    final normalized = defaultDownloadDirectory.trim();
+    if (normalized.isEmpty ||
+        !mounted ||
+        _downloadDirectory.trim().isNotEmpty) {
+      return;
+    }
+    await _saveDownloadDirectory(normalized);
   }
 
   Future<void> _saveCookie(String value) async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -274,6 +275,16 @@ class DownloadTaskManager extends ChangeNotifier {
           continue;
         }
 
+        final downloadDirectoryError = await _validateDownloadDirectory();
+        if (downloadDirectoryError != null) {
+          _tasks[index] = task.copyWith(
+            status: UploadTaskStatus.failed,
+            errorMessage: downloadDirectoryError,
+          );
+          notifyListeners();
+          continue;
+        }
+
         _tasks[index] = task.copyWith(
           status: UploadTaskStatus.uploading,
           clearError: true,
@@ -297,6 +308,7 @@ class DownloadTaskManager extends ChangeNotifier {
 
     try {
       final savePath = _buildSavePath(source.name);
+      await _ensureParentDirectory(savePath);
       await _downloadFileHandler(
         cookie: _cookie,
         materialId: source.id,
@@ -401,6 +413,36 @@ class DownloadTaskManager extends ChangeNotifier {
         .replaceAll('>', '_')
         .replaceAll('|', '_');
     return p.join(_downloadDirectory, safeName);
+  }
+
+  Future<String?> _validateDownloadDirectory() async {
+    final normalized = _downloadDirectory.trim();
+    if (normalized.isEmpty) {
+      return '未设置下载目录，请先到“设置”配置。';
+    }
+
+    try {
+      final directory = Directory(normalized);
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      final probeFile = File(p.join(directory.path, '.seewopan_write_probe'));
+      await probeFile.writeAsString('ok', flush: true);
+      if (await probeFile.exists()) {
+        await probeFile.delete();
+      }
+      return null;
+    } catch (_) {
+      return '下载目录不可写，请在“设置”中重新选择目录。当前路径：$normalized';
+    }
+  }
+
+  Future<void> _ensureParentDirectory(String filePath) async {
+    final parentPath = p.dirname(filePath);
+    final directory = Directory(parentPath);
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
   }
 
   String _createTaskId(DateTime now) {
