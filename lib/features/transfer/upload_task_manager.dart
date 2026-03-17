@@ -36,8 +36,8 @@ class UploadTaskManager extends ChangeNotifier {
   final Map<String, CancelToken> _cancelTokenByTaskId = <String, CancelToken>{};
   final Map<String, _TaskStopAction> _stopActionByTaskId =
       <String, _TaskStopAction>{};
-  final Map<String, _ProgressSample> _progressSampleByTaskId =
-      <String, _ProgressSample>{};
+  final Map<String, List<_ProgressSample>> _progressSamplesByTaskId =
+      <String, List<_ProgressSample>>{};
   final Random _random = Random();
 
   String _cookie = '';
@@ -126,7 +126,7 @@ class UploadTaskManager extends ChangeNotifier {
       status: UploadTaskStatus.paused,
       speedBps: 0,
     );
-    _progressSampleByTaskId.remove(taskId);
+    _progressSamplesByTaskId.remove(taskId);
     notifyListeners();
     _cancelTokenByTaskId[taskId]?.cancel('Paused by user');
   }
@@ -150,7 +150,7 @@ class UploadTaskManager extends ChangeNotifier {
       totalBytes: task.size,
       clearError: true,
     );
-    _progressSampleByTaskId.remove(taskId);
+    _progressSamplesByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -178,7 +178,7 @@ class UploadTaskManager extends ChangeNotifier {
         totalBytes: task.size,
         clearError: true,
       );
-      _progressSampleByTaskId.remove(taskId);
+      _progressSamplesByTaskId.remove(taskId);
       notifyListeners();
       _cancelTokenByTaskId[taskId]?.cancel('Canceled by user');
       return;
@@ -192,7 +192,7 @@ class UploadTaskManager extends ChangeNotifier {
       totalBytes: task.size,
       clearError: true,
     );
-    _progressSampleByTaskId.remove(taskId);
+    _progressSamplesByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -227,7 +227,7 @@ class UploadTaskManager extends ChangeNotifier {
       totalBytes: task.size,
       clearError: true,
     );
-    _progressSampleByTaskId.remove(taskId);
+    _progressSamplesByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -306,7 +306,7 @@ class UploadTaskManager extends ChangeNotifier {
           _tasks[index] = _tasks[index].copyWith(
             status: UploadTaskStatus.uploading,
             progress: progress.progress.clamp(0.0, 0.99),
-            speedBps: _calculateInstantSpeed(taskId, progress.sentBytes),
+            speedBps: _calculateRecentAverageSpeed(taskId, progress.sentBytes),
             uploadedBytes: progress.sentBytes,
             totalBytes: progress.totalBytes,
           );
@@ -329,7 +329,7 @@ class UploadTaskManager extends ChangeNotifier {
           downloadUrl: result.downloadUrl,
           errorMessage: null,
         );
-        _progressSampleByTaskId.remove(taskId);
+        _progressSamplesByTaskId.remove(taskId);
         _sourceByTaskId.remove(taskId);
         notifyListeners();
       }
@@ -356,7 +356,7 @@ class UploadTaskManager extends ChangeNotifier {
               clearError: true,
             );
           }
-          _progressSampleByTaskId.remove(taskId);
+          _progressSamplesByTaskId.remove(taskId);
           notifyListeners();
           return;
         }
@@ -364,33 +364,51 @@ class UploadTaskManager extends ChangeNotifier {
           status: UploadTaskStatus.failed,
           errorMessage: '$error',
         );
-        _progressSampleByTaskId.remove(taskId);
+        _progressSamplesByTaskId.remove(taskId);
         notifyListeners();
       }
     } finally {
       _cancelTokenByTaskId.remove(taskId);
       _stopActionByTaskId.remove(taskId);
-      _progressSampleByTaskId.remove(taskId);
+      _progressSamplesByTaskId.remove(taskId);
       _runningUploads = max(0, _runningUploads - 1);
       unawaited(_runQueue());
     }
   }
 
-  double _calculateInstantSpeed(String taskId, int sentBytes) {
+  double _calculateRecentAverageSpeed(String taskId, int sentBytes) {
+    const speedWindow = Duration(milliseconds: 500);
     final now = DateTime.now();
-    final previous = _progressSampleByTaskId[taskId];
-    _progressSampleByTaskId[taskId] = _ProgressSample(
-      sentBytes: sentBytes,
-      timestamp: now,
+    final samples = _progressSamplesByTaskId.putIfAbsent(
+      taskId,
+      () => <_ProgressSample>[],
     );
-    if (previous == null) {
+    samples.add(
+      _ProgressSample(
+        sentBytes: sentBytes,
+        timestamp: now,
+      ),
+    );
+
+    final cutoff = now.subtract(speedWindow);
+    while (samples.length >= 2 && samples[1].timestamp.isBefore(cutoff)) {
+      samples.removeAt(0);
+    }
+    if (samples.length < 2) {
       return 0;
     }
 
-    final deltaBytes = sentBytes - previous.sentBytes;
-    final deltaMs = now.difference(previous.timestamp).inMilliseconds;
+    final first = samples.first;
+    final last = samples.last;
+    final deltaBytes = last.sentBytes - first.sentBytes;
+    final deltaMs = last.timestamp.difference(first.timestamp).inMilliseconds;
     if (deltaBytes <= 0 || deltaMs <= 0) {
       return 0;
+    }
+
+    // Keep a small bounded history per task.
+    if (samples.length > 32) {
+      samples.removeRange(0, samples.length - 32);
     }
     return deltaBytes * 1000 / deltaMs;
   }
