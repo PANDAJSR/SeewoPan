@@ -129,18 +129,29 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       return;
     }
 
-    await widget.onDownloadMaterials(files);
+    final addedCount = await widget.onDownloadMaterials(files);
     if (!mounted) {
       return;
     }
 
-    final message = skippedCount > 0
-        ? '已添加 ${files.length} 个下载任务，已跳过 $skippedCount 个文件夹。'
-        : '已添加 ${files.length} 个下载任务。';
+    final canceledCount = files.length - addedCount;
+    final fragments = <String>[];
+    if (addedCount > 0) {
+      fragments.add('已添加 $addedCount 个下载任务');
+    }
+    if (skippedCount > 0) {
+      fragments.add('已跳过 $skippedCount 个文件夹');
+    }
+    if (canceledCount > 0) {
+      fragments.add('已取消 $canceledCount 个重名文件');
+    }
+    final message = fragments.isEmpty ? '未添加下载任务。' : '${fragments.join('，')}。';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-    widget.onOpenTransferTab();
+    if (addedCount > 0) {
+      widget.onOpenTransferTab();
+    }
   }
 
   String? _buildDownloadUrl(DriveMaterial item) {

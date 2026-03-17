@@ -33,8 +33,7 @@ class CloudTab extends StatefulWidget {
   final bool isLoadingCookie;
   final PincoApiClient apiClient;
   final Future<void> Function(List<UploadSourceFile> files) onUploadFiles;
-  final Future<void> Function(List<DriveMaterial> materials)
-      onDownloadMaterials;
+  final Future<int> Function(List<DriveMaterial> materials) onDownloadMaterials;
   final VoidCallback onOpenTransferTab;
   final bool enableExternalDrop;
 
