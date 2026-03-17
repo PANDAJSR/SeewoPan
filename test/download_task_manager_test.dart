@@ -98,6 +98,48 @@ void main() {
 
     expect(manager.tasks.first.errorMessage, contains('未设置下载目录'));
   });
+
+  test('calculates instant download speed from progress delta', () async {
+    final release = Completer<void>();
+    final manager = DownloadTaskManager(
+      apiClient: PincoApiClient(),
+      downloadFileHandler: ({
+        required String cookie,
+        required String materialId,
+        required String savePath,
+        CancelToken? cancelToken,
+        ProgressCallback? onReceiveProgress,
+      }) async {
+        const tick = Duration(milliseconds: 100);
+        onReceiveProgress?.call(128, 1024);
+        await Future<void>.delayed(tick);
+        onReceiveProgress?.call(256, 1024);
+        await release.future;
+      },
+    );
+
+    manager.updateCookie('token=abc');
+    manager.updateDownloadDirectory('/tmp');
+    await manager.enqueueMaterials([
+      const DriveMaterial(
+        id: '1',
+        folderId: '0',
+        name: 'a.txt',
+        size: 1024,
+        mimeType: 'text/plain',
+      ),
+    ]);
+
+    await _waitUntil(() {
+      return manager.tasks.isNotEmpty && manager.tasks.first.speedBps > 0;
+    });
+
+    expect(manager.tasks.first.speedBps, closeTo(1280.0, 200.0));
+    release.complete();
+    await _waitUntil(() {
+      return manager.tasks.first.status == UploadTaskStatus.success;
+    });
+  });
 }
 
 Future<void> _waitUntil(

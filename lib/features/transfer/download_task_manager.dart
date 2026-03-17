@@ -36,6 +36,8 @@ class DownloadTaskManager extends ChangeNotifier {
   final Map<String, CancelToken> _cancelTokenByTaskId = <String, CancelToken>{};
   final Map<String, _DownloadTaskStopAction> _stopActionByTaskId =
       <String, _DownloadTaskStopAction>{};
+  final Map<String, _ProgressSample> _progressSampleByTaskId =
+      <String, _ProgressSample>{};
   final Random _random = Random();
 
   String _cookie = '';
@@ -130,6 +132,7 @@ class DownloadTaskManager extends ChangeNotifier {
       status: UploadTaskStatus.paused,
       speedBps: 0,
     );
+    _progressSampleByTaskId.remove(taskId);
     notifyListeners();
     _cancelTokenByTaskId[taskId]?.cancel('Paused by user');
   }
@@ -153,6 +156,7 @@ class DownloadTaskManager extends ChangeNotifier {
       totalBytes: max(task.size, 0),
       clearError: true,
     );
+    _progressSampleByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -180,6 +184,7 @@ class DownloadTaskManager extends ChangeNotifier {
         totalBytes: max(task.size, 0),
         clearError: true,
       );
+      _progressSampleByTaskId.remove(taskId);
       notifyListeners();
       _cancelTokenByTaskId[taskId]?.cancel('Canceled by user');
       return;
@@ -193,6 +198,7 @@ class DownloadTaskManager extends ChangeNotifier {
       totalBytes: max(task.size, 0),
       clearError: true,
     );
+    _progressSampleByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -227,6 +233,7 @@ class DownloadTaskManager extends ChangeNotifier {
       totalBytes: max(task.size, 0),
       clearError: true,
     );
+    _progressSampleByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -304,8 +311,6 @@ class DownloadTaskManager extends ChangeNotifier {
   }) async {
     final cancelToken = CancelToken();
     _cancelTokenByTaskId[taskId] = cancelToken;
-    final startedAt = DateTime.now();
-
     try {
       final savePath = _buildSavePath(source.name);
       await _ensureParentDirectory(savePath);
@@ -323,12 +328,10 @@ class DownloadTaskManager extends ChangeNotifier {
             return;
           }
 
-          final elapsedMs =
-              max(1, DateTime.now().difference(startedAt).inMilliseconds);
           final totalBytes = total > 0 ? total : max(_tasks[index].size, 0);
           final progress =
               totalBytes <= 0 ? 0.0 : (received / totalBytes).clamp(0.0, 0.99);
-          final speedBps = received * 1000 / elapsedMs;
+          final speedBps = _calculateInstantSpeed(taskId, received);
 
           _tasks[index] = _tasks[index].copyWith(
             status: UploadTaskStatus.uploading,
@@ -352,11 +355,13 @@ class DownloadTaskManager extends ChangeNotifier {
         _tasks[index] = _tasks[index].copyWith(
           status: UploadTaskStatus.success,
           progress: 1,
+          speedBps: 0,
           uploadedBytes: totalBytes,
           totalBytes: totalBytes,
           errorMessage: null,
           localPath: savePath,
         );
+        _progressSampleByTaskId.remove(taskId);
         notifyListeners();
       }
     } catch (error) {
@@ -382,6 +387,7 @@ class DownloadTaskManager extends ChangeNotifier {
               clearError: true,
             );
           }
+          _progressSampleByTaskId.remove(taskId);
           notifyListeners();
           return;
         }
@@ -390,11 +396,13 @@ class DownloadTaskManager extends ChangeNotifier {
           status: UploadTaskStatus.failed,
           errorMessage: '$error',
         );
+        _progressSampleByTaskId.remove(taskId);
         notifyListeners();
       }
     } finally {
       _cancelTokenByTaskId.remove(taskId);
       _stopActionByTaskId.remove(taskId);
+      _progressSampleByTaskId.remove(taskId);
       _runningDownloads = max(0, _runningDownloads - 1);
       unawaited(_runQueue());
     }
@@ -445,10 +453,39 @@ class DownloadTaskManager extends ChangeNotifier {
     }
   }
 
+  double _calculateInstantSpeed(String taskId, int receivedBytes) {
+    final now = DateTime.now();
+    final previous = _progressSampleByTaskId[taskId];
+    _progressSampleByTaskId[taskId] = _ProgressSample(
+      receivedBytes: receivedBytes,
+      timestamp: now,
+    );
+    if (previous == null) {
+      return 0;
+    }
+
+    final deltaBytes = receivedBytes - previous.receivedBytes;
+    final deltaMs = now.difference(previous.timestamp).inMilliseconds;
+    if (deltaBytes <= 0 || deltaMs <= 0) {
+      return 0;
+    }
+    return deltaBytes * 1000 / deltaMs;
+  }
+
   String _createTaskId(DateTime now) {
     final millis = now.millisecondsSinceEpoch.toRadixString(16);
     final randomPart =
         _random.nextInt(1 << 32).toRadixString(16).padLeft(8, '0');
     return '$millis$randomPart';
   }
+}
+
+class _ProgressSample {
+  const _ProgressSample({
+    required this.receivedBytes,
+    required this.timestamp,
+  });
+
+  final int receivedBytes;
+  final DateTime timestamp;
 }

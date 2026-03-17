@@ -159,14 +159,21 @@ void main() {
         CancelToken? cancelToken,
         UploadProgressCallback? onProgress,
       }) async {
-        final elapsed = fileName == 'a.bin'
-            ? const Duration(milliseconds: 500)
-            : const Duration(milliseconds: 250);
+        const tick = Duration(milliseconds: 100);
+        onProgress?.call(
+          UploadProgress(
+            sentBytes: 128,
+            totalBytes: bytes.length,
+            elapsed: tick,
+            estimatedProgress: 0.25,
+          ),
+        );
+        await Future<void>.delayed(tick);
         onProgress?.call(
           UploadProgress(
             sentBytes: 256,
             totalBytes: bytes.length,
-            elapsed: elapsed,
+            elapsed: tick * 2,
             estimatedProgress: 0.5,
           ),
         );
@@ -212,7 +219,7 @@ void main() {
           uploading.every((task) => task.speedBps > 0);
     });
 
-    expect(manager.totalUploadingSpeedBps, closeTo(1536.0, 0.001));
+    expect(manager.totalUploadingSpeedBps, closeTo(2560.0, 350.0));
 
     releaseUploads.complete();
     await _waitUntil(() {
