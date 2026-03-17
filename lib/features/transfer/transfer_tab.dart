@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import 'download_task_manager.dart';
 import 'upload_task_manager.dart';
@@ -195,11 +199,37 @@ class _TaskCard extends StatelessWidget {
                 task.taskType == TransferTaskType.download)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  task.localPath!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.localPath!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => unawaited(
+                            _openDownloadedFile(context, task.localPath!),
+                          ),
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('打开文件'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => unawaited(
+                            _revealDownloadedFile(context, task.localPath!),
+                          ),
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text('打开文件夹'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             if (task.errorMessage != null &&
@@ -242,4 +272,86 @@ String _formatBytes(int bytes) {
   }
 
   return '${value.toStringAsFixed(2)} ${units[unitIndex]}';
+}
+
+Future<void> _openDownloadedFile(BuildContext context, String filePath) async {
+  final path = filePath.trim();
+  if (path.isEmpty) {
+    return;
+  }
+  final targetFile = File(path);
+  if (!await targetFile.exists()) {
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('文件不存在，可能已被移动或删除。')));
+    return;
+  }
+
+  final success = await _openPath(path);
+  if (success || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('打开文件失败，请检查系统关联应用。')));
+}
+
+Future<void> _revealDownloadedFile(
+    BuildContext context, String filePath) async {
+  final path = filePath.trim();
+  if (path.isEmpty) {
+    return;
+  }
+
+  final success = await _revealInFolder(path);
+  if (success || !context.mounted) {
+    return;
+  }
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('打开文件夹失败，请检查系统设置。')));
+}
+
+Future<bool> _openPath(String path) async {
+  try {
+    if (Platform.isMacOS) {
+      final result = await Process.run('open', [path]);
+      return result.exitCode == 0;
+    }
+    if (Platform.isWindows) {
+      final result = await Process.run('cmd', ['/c', 'start', '', path]);
+      return result.exitCode == 0;
+    }
+    if (Platform.isLinux) {
+      final result = await Process.run('xdg-open', [path]);
+      return result.exitCode == 0;
+    }
+  } catch (_) {
+    return false;
+  }
+  return false;
+}
+
+Future<bool> _revealInFolder(String filePath) async {
+  try {
+    if (Platform.isMacOS) {
+      final result = await Process.run('open', ['-R', filePath]);
+      return result.exitCode == 0;
+    }
+    if (Platform.isWindows) {
+      final result = await Process.run('explorer', ['/select,', filePath]);
+      return result.exitCode == 0;
+    }
+    if (Platform.isLinux) {
+      final folderPath = p.dirname(filePath);
+      final result = await Process.run('xdg-open', [folderPath]);
+      return result.exitCode == 0;
+    }
+  } catch (_) {
+    return false;
+  }
+  return false;
 }
