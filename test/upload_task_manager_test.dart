@@ -159,7 +159,7 @@ void main() {
         CancelToken? cancelToken,
         UploadProgressCallback? onProgress,
       }) async {
-        const tick = Duration(milliseconds: 100);
+        const tick = Duration(milliseconds: 600);
         onProgress?.call(
           UploadProgress(
             sentBytes: 128,
@@ -219,7 +219,7 @@ void main() {
           uploading.every((task) => task.speedBps > 0);
     });
 
-    expect(manager.totalUploadingSpeedBps, closeTo(2560.0, 350.0));
+    expect(manager.totalUploadingSpeedBps, closeTo(426.0, 220.0));
 
     releaseUploads.complete();
     await _waitUntil(() {

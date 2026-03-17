@@ -99,7 +99,7 @@ void main() {
     expect(manager.tasks.first.errorMessage, contains('未设置下载目录'));
   });
 
-  test('calculates instant download speed from progress delta', () async {
+  test('calculates 500ms-window download speed from progress delta', () async {
     final release = Completer<void>();
     final manager = DownloadTaskManager(
       apiClient: PincoApiClient(),
@@ -110,7 +110,7 @@ void main() {
         CancelToken? cancelToken,
         ProgressCallback? onReceiveProgress,
       }) async {
-        const tick = Duration(milliseconds: 100);
+        const tick = Duration(milliseconds: 600);
         onReceiveProgress?.call(128, 1024);
         await Future<void>.delayed(tick);
         onReceiveProgress?.call(256, 1024);
@@ -134,7 +134,7 @@ void main() {
       return manager.tasks.isNotEmpty && manager.tasks.first.speedBps > 0;
     });
 
-    expect(manager.tasks.first.speedBps, closeTo(1280.0, 200.0));
+    expect(manager.tasks.first.speedBps, closeTo(213.0, 120.0));
     release.complete();
     await _waitUntil(() {
       return manager.tasks.first.status == UploadTaskStatus.success;

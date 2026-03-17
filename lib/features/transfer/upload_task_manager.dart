@@ -38,6 +38,8 @@ class UploadTaskManager extends ChangeNotifier {
       <String, _TaskStopAction>{};
   final Map<String, List<_ProgressSample>> _progressSamplesByTaskId =
       <String, List<_ProgressSample>>{};
+  final Map<String, double> _lastReportedSpeedByTaskId = <String, double>{};
+  final Map<String, DateTime> _lastSpeedUpdateAtByTaskId = <String, DateTime>{};
   final Random _random = Random();
 
   String _cookie = '';
@@ -127,6 +129,8 @@ class UploadTaskManager extends ChangeNotifier {
       speedBps: 0,
     );
     _progressSamplesByTaskId.remove(taskId);
+    _lastReportedSpeedByTaskId.remove(taskId);
+    _lastSpeedUpdateAtByTaskId.remove(taskId);
     notifyListeners();
     _cancelTokenByTaskId[taskId]?.cancel('Paused by user');
   }
@@ -151,6 +155,8 @@ class UploadTaskManager extends ChangeNotifier {
       clearError: true,
     );
     _progressSamplesByTaskId.remove(taskId);
+    _lastReportedSpeedByTaskId.remove(taskId);
+    _lastSpeedUpdateAtByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -179,6 +185,8 @@ class UploadTaskManager extends ChangeNotifier {
         clearError: true,
       );
       _progressSamplesByTaskId.remove(taskId);
+      _lastReportedSpeedByTaskId.remove(taskId);
+      _lastSpeedUpdateAtByTaskId.remove(taskId);
       notifyListeners();
       _cancelTokenByTaskId[taskId]?.cancel('Canceled by user');
       return;
@@ -193,6 +201,8 @@ class UploadTaskManager extends ChangeNotifier {
       clearError: true,
     );
     _progressSamplesByTaskId.remove(taskId);
+    _lastReportedSpeedByTaskId.remove(taskId);
+    _lastSpeedUpdateAtByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -228,6 +238,8 @@ class UploadTaskManager extends ChangeNotifier {
       clearError: true,
     );
     _progressSamplesByTaskId.remove(taskId);
+    _lastReportedSpeedByTaskId.remove(taskId);
+    _lastSpeedUpdateAtByTaskId.remove(taskId);
     notifyListeners();
     unawaited(_runQueue());
   }
@@ -330,6 +342,8 @@ class UploadTaskManager extends ChangeNotifier {
           errorMessage: null,
         );
         _progressSamplesByTaskId.remove(taskId);
+        _lastReportedSpeedByTaskId.remove(taskId);
+        _lastSpeedUpdateAtByTaskId.remove(taskId);
         _sourceByTaskId.remove(taskId);
         notifyListeners();
       }
@@ -357,6 +371,8 @@ class UploadTaskManager extends ChangeNotifier {
             );
           }
           _progressSamplesByTaskId.remove(taskId);
+          _lastReportedSpeedByTaskId.remove(taskId);
+          _lastSpeedUpdateAtByTaskId.remove(taskId);
           notifyListeners();
           return;
         }
@@ -365,12 +381,16 @@ class UploadTaskManager extends ChangeNotifier {
           errorMessage: '$error',
         );
         _progressSamplesByTaskId.remove(taskId);
+        _lastReportedSpeedByTaskId.remove(taskId);
+        _lastSpeedUpdateAtByTaskId.remove(taskId);
         notifyListeners();
       }
     } finally {
       _cancelTokenByTaskId.remove(taskId);
       _stopActionByTaskId.remove(taskId);
       _progressSamplesByTaskId.remove(taskId);
+      _lastReportedSpeedByTaskId.remove(taskId);
+      _lastSpeedUpdateAtByTaskId.remove(taskId);
       _runningUploads = max(0, _runningUploads - 1);
       unawaited(_runQueue());
     }
@@ -410,7 +430,18 @@ class UploadTaskManager extends ChangeNotifier {
     if (samples.length > 32) {
       samples.removeRange(0, samples.length - 32);
     }
-    return deltaBytes * 1000 / deltaMs;
+
+    final previousUpdateAt = _lastSpeedUpdateAtByTaskId[taskId];
+    final previousReported = _lastReportedSpeedByTaskId[taskId] ?? 0;
+    if (previousUpdateAt != null &&
+        now.difference(previousUpdateAt) < speedWindow) {
+      return previousReported;
+    }
+
+    final computed = deltaBytes * 1000 / deltaMs;
+    _lastReportedSpeedByTaskId[taskId] = computed;
+    _lastSpeedUpdateAtByTaskId[taskId] = now;
+    return computed;
   }
 
   String _createTaskId(DateTime now) {
