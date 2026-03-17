@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/cloud/cloud_tab.dart';
@@ -11,6 +13,7 @@ import '../features/transfer/download_task_manager.dart';
 import '../features/transfer/transfer_tab.dart';
 import '../features/transfer/upload_task_manager.dart';
 import '../shared/default_download_directory.dart';
+import '../shared/models/drive_material.dart';
 import '../shared/pinco_api_client.dart';
 
 class HomeShellPage extends StatefulWidget {
@@ -142,7 +145,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
           isLoadingCookie: _isLoadingCookie,
           apiClient: _apiClient,
           onUploadFiles: _uploadTaskManager.enqueueFiles,
-          onDownloadMaterials: _downloadTaskManager.enqueueMaterials,
+          onDownloadMaterials: _enqueueDownloadMaterials,
           onOpenTransferTab: () => _onSelect(1),
         ),
         TransferTab(
@@ -283,6 +286,75 @@ class _HomeShellPageState extends State<HomeShellPage> {
   Future<void> _resetDownloadDirectory() async {
     final defaultPath = await resolveDefaultDownloadDirectoryPath();
     await _saveDownloadDirectory(defaultPath.trim());
+  }
+
+  Future<void> _enqueueDownloadMaterials(List<DriveMaterial> materials) async {
+    if (materials.isEmpty || !mounted) {
+      return;
+    }
+
+    final isReady = await _ensureDownloadDirectoryReady(interactive: true);
+    if (!mounted) {
+      return;
+    }
+    if (!isReady) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未授予下载目录权限，已取消下载入队。')),
+      );
+      return;
+    }
+
+    await _downloadTaskManager.enqueueMaterials(materials);
+  }
+
+  Future<bool> _ensureDownloadDirectoryReady(
+      {required bool interactive}) async {
+    final current = _downloadDirectory.trim();
+    if (current.isNotEmpty) {
+      final writable = await _isWritableDirectory(current);
+      if (writable) {
+        return true;
+      }
+    }
+
+    if (!interactive || !mounted) {
+      return false;
+    }
+
+    final fallback = await resolveDefaultDownloadDirectoryPath();
+    final initialDirectory = current.isNotEmpty
+        ? current
+        : (fallback.trim().isEmpty ? null : fallback.trim());
+    final selected = await getDirectoryPath(initialDirectory: initialDirectory);
+    final normalized = selected?.trim() ?? '';
+    if (normalized.isEmpty || !mounted) {
+      return false;
+    }
+
+    await _saveDownloadDirectory(normalized);
+    return _isWritableDirectory(normalized);
+  }
+
+  Future<bool> _isWritableDirectory(String path) async {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    try {
+      final directory = Directory(normalized);
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      final probe = File(p.join(directory.path, '.seewopan_write_probe'));
+      await probe.writeAsString('ok', flush: true);
+      if (await probe.exists()) {
+        await probe.delete();
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _saveDownloadDirectory(String value) async {
