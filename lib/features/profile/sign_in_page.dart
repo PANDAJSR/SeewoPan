@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -14,10 +13,12 @@ class SignInPage extends StatefulWidget {
 class _SignInPageState extends State<SignInPage> {
   WebViewController? _controller;
   bool _isLoading = true;
-  String? _error;
 
   static const String _signInUrl =
       'https://easinote.seewo.com/extend/app/dailysign';
+
+  static const String _userAgent =
+      'Mozilla/5.0 (Linux; Android 16; PJX110 Build/UKQ1.231108.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/121.0.6167.71 MQQBrowser/6.2 TBS/048447 Mobile Safari/537.36 ENApp/2.1.52.1 NativeVersion/47';
 
   @override
   void initState() {
@@ -26,54 +27,36 @@ class _SignInPageState extends State<SignInPage> {
   }
 
   Future<void> _initWebView() async {
+    final controller = WebViewController();
+
+    await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
     try {
-      final controller = WebViewController();
+      await controller.setBackgroundColor(Colors.white);
+    } catch (_) {}
+    await controller.setUserAgent(_userAgent);
 
-      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      if (!kIsWeb && defaultTargetPlatform != TargetPlatform.macOS) {
-        await controller.setBackgroundColor(Colors.white);
-      }
+    await controller.setNavigationDelegate(
+      NavigationDelegate(
+        onPageStarted: (String url) {
+          debugPrint('Page started: $url');
+          setState(() => _isLoading = true);
+        },
+        onPageFinished: (String url) {
+          debugPrint('Page finished: $url');
+          setState(() => _isLoading = false);
+        },
+        onWebResourceError: (WebResourceError error) {
+          debugPrint('WebResourceError: ${error.description}');
+        },
+      ),
+    );
 
-      await controller.setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            debugPrint('Page started: $url');
-            if (!mounted) {
-              return;
-            }
-            setState(() => _isLoading = true);
-          },
-          onPageFinished: (String url) {
-            debugPrint('Page finished: $url');
-            if (!mounted) {
-              return;
-            }
-            setState(() {
-              _isLoading = false;
-            });
-          },
-          onWebResourceError: (WebResourceError error) {
-            debugPrint('WebResourceError: ${error.description}');
-          },
-        ),
-      );
-
-      if (!mounted) {
-        return;
-      }
+    if (mounted) {
       setState(() => _controller = controller);
-
-      await _setCookies();
-      await controller.loadRequest(Uri.parse(_signInUrl));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isLoading = false;
-        _error = error.toString();
-      });
     }
+
+    await _setCookies();
+    await controller.loadRequest(Uri.parse(_signInUrl));
   }
 
   Future<void> _setCookies() async {
@@ -114,18 +97,16 @@ class _SignInPageState extends State<SignInPage> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = _controller;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('每日签到'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: controller == null
+            onPressed: _controller == null
                 ? null
                 : () {
-                    _setCookies().then((_) => controller.reload());
+                    _setCookies().then((_) => _controller!.reload());
                   },
           ),
         ],
@@ -134,11 +115,9 @@ class _SignInPageState extends State<SignInPage> {
         children: [
           if (_isLoading) const LinearProgressIndicator(),
           Expanded(
-            child: _error != null
-                ? Center(child: Text('加载签到页失败：$_error'))
-                : controller == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : WebViewWidget(controller: controller),
+            child: _controller != null
+                ? WebViewWidget(controller: _controller!)
+                : const Center(child: CircularProgressIndicator()),
           ),
         ],
       ),
