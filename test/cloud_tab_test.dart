@@ -534,4 +534,83 @@ void main() {
     expect(yOf('B.txt') < yOf('C.txt'), isTrue);
     expect(yOf('C.txt') < yOf('A.txt'), isTrue);
   });
+
+  testWidgets('previews image materials from material detail url', (
+    WidgetTester tester,
+  ) async {
+    final requestedMaterialIds = <String>[];
+    const pngDataUrl =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action == 'GetV1DriveMaterials') {
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'list': [
+                {
+                  'id': 'image-1',
+                  'folderId': '0',
+                  'name': '板书截图.PNG',
+                  'mimeType': 'image/png',
+                  'type': 'resource',
+                  'size': 1234,
+                },
+              ],
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      if (action == 'GetV1DriveMaterialsByMaterialId') {
+        final payload = jsonDecode(request.body) as Map<String, dynamic>;
+        requestedMaterialIds.add(payload['materialId'].toString());
+        return http.Response(
+          jsonEncode({
+            'statusCode': 0,
+            'data': {
+              'storeType': 2,
+              'showUrl': '',
+              'downloadUrl': pngDataUrl,
+            },
+            'message': 'ok',
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return http.Response('not-found', 404);
+    });
+
+    final apiClient = PincoApiClient(httpClient: mockClient);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: apiClient,
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onDownloadMaterials: (materials) async => materials.length,
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('板书截图.PNG'));
+    await tester.pumpAndSettle();
+
+    expect(requestedMaterialIds, <String>['image-1']);
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('板书截图.PNG'), findsAtLeastNWidgets(2));
+  });
 }

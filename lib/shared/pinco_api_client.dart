@@ -12,6 +12,7 @@ import 'models/drive_materials_capacity.dart';
 import 'models/user_profile.dart';
 
 part 'pinco_api_client_materials.dart';
+part 'pinco_api_client_preview.dart';
 part 'pinco_api_client_upload.dart';
 part 'pinco_api_client_parsing.dart';
 

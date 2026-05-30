@@ -85,12 +85,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       return;
     }
 
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('文件预览功能开发中。')),
-    );
+    await _previewMaterial(item);
   }
 
   Future<void> _pickAndUploadFiles() async {

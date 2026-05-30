@@ -19,6 +19,46 @@ void main() {
     );
   });
 
+  test('getMaterialPreview should call material detail action', () async {
+    final mockClient = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(
+        request.url.queryParameters['actionName'],
+        'GetV1DriveMaterialsByMaterialId',
+      );
+      expect(request.headers['cookie'], 'token=abc');
+
+      final payload = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(payload['materialId'], 'm1');
+
+      return http.Response(
+        jsonEncode({
+          'statusCode': 0,
+          'data': {
+            'storeType': 2,
+            'showUrl': '',
+            'downloadUrl': 'https://example.com/image.png',
+          },
+          'message': 'ok',
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final client = PincoApiClient(httpClient: mockClient);
+
+    final preview = await client.getMaterialPreview(
+      cookie: ' token=abc ',
+      materialId: ' m1 ',
+    );
+
+    expect(preview.previewUrl, 'https://example.com/image.png');
+    expect(preview.downloadUrl, 'https://example.com/image.png');
+    expect(preview.showUrl, isNull);
+    expect(preview.storeType, 2);
+  });
+
   test('getMaterials should send keyword and cache by keyword', () async {
     var listCallCount = 0;
     final sentKeywords = <String>[];
