@@ -7,7 +7,11 @@ import 'package:file_icon/file_icon.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
+import 'office_preview_view.dart';
 import '../../shared/models/drive_material.dart';
 import '../../shared/pinco_api_client.dart';
 import '../transfer/upload_task_manager.dart';

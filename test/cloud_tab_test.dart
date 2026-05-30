@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -539,8 +540,22 @@ void main() {
     WidgetTester tester,
   ) async {
     final requestedMaterialIds = <String>[];
+    final clipboardWrites = <String>[];
     const pngDataUrl =
         'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        final data = call.arguments as Map<dynamic, dynamic>;
+        clipboardWrites.add(data['text'].toString());
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
 
     final mockClient = MockClient((request) async {
       final action = request.url.queryParameters['actionName'];
@@ -604,13 +619,22 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('板书截图.PNG'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(requestedMaterialIds, <String>['image-1']);
     expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('板书截图.PNG'), findsAtLeastNWidgets(2));
+
+    await tester.tap(find.text('复制地址'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(clipboardWrites, <String>[pngDataUrl]);
+    expect(find.text('已复制文件地址'), findsOneWidget);
   });
 }
