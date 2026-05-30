@@ -98,6 +98,8 @@ extension _CloudTabPreviewExtension on _CloudTabState {
           isVideo: false,
         ),
       _PreviewType.office => _OfficePreviewLoader(previewUrl: previewUrl),
+      _PreviewType.pdf => PdfViewer.uri(Uri.parse(previewUrl)),
+      _PreviewType.model => _ModelPreviewViewer(previewUrl: previewUrl),
       _PreviewType.unsupported => const SizedBox.shrink(),
     };
 
@@ -178,6 +180,14 @@ extension _CloudTabPreviewExtension on _CloudTabState {
     if (mimeType.startsWith('audio/')) {
       return _PreviewType.audio;
     }
+    if (mimeType == 'application/pdf') {
+      return _PreviewType.pdf;
+    }
+    if (mimeType == 'model/gltf-binary' ||
+        mimeType == 'model/gltf+json' ||
+        mimeType == 'model/gltf-json') {
+      return _PreviewType.model;
+    }
 
     final name = item.name.trim().toLowerCase();
     if (name.endsWith('.png') ||
@@ -208,6 +218,12 @@ extension _CloudTabPreviewExtension on _CloudTabState {
         name.endsWith('.xlsx') ||
         name.endsWith('.pptx')) {
       return _PreviewType.office;
+    }
+    if (name.endsWith('.pdf')) {
+      return _PreviewType.pdf;
+    }
+    if (name.endsWith('.glb') || name.endsWith('.gltf')) {
+      return _PreviewType.model;
     }
     return _PreviewType.unsupported;
   }
@@ -250,82 +266,7 @@ enum _PreviewType {
   video,
   audio,
   office,
+  pdf,
+  model,
   unsupported,
-}
-
-class _MediaPreviewPlayer extends StatefulWidget {
-  const _MediaPreviewPlayer({
-    required this.previewUrl,
-    required this.isVideo,
-  });
-
-  final String previewUrl;
-  final bool isVideo;
-
-  @override
-  State<_MediaPreviewPlayer> createState() => _MediaPreviewPlayerState();
-}
-
-class _MediaPreviewPlayerState extends State<_MediaPreviewPlayer> {
-  late final Player _player;
-  late final VideoController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _player = Player();
-    _controller = VideoController(_player);
-    unawaited(_player.open(Media(widget.previewUrl)));
-  }
-
-  @override
-  void dispose() {
-    unawaited(_player.dispose());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: AspectRatio(
-        aspectRatio: widget.isVideo ? 16 / 9 : 16 / 4,
-        child: ColoredBox(
-          color: Colors.black,
-          child: Video(controller: _controller),
-        ),
-      ),
-    );
-  }
-}
-
-class _OfficePreviewLoader extends StatelessWidget {
-  const _OfficePreviewLoader({required this.previewUrl});
-
-  final String previewUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<http.Response>(
-      future: http.get(Uri.parse(previewUrl)),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError || !snapshot.hasData) {
-          return Center(
-            child: Text('加载 Office 文件失败：${snapshot.error ?? '未知错误'}'),
-          );
-        }
-
-        final response = snapshot.data!;
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          return Center(
-              child: Text('加载 Office 文件失败：HTTP ${response.statusCode}'));
-        }
-
-        return buildOfficePreviewView(response.bodyBytes);
-      },
-    );
-  }
 }

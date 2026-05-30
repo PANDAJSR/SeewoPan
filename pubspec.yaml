@@ -44,10 +44,11 @@ dependencies:
   desktop_drop: ^0.7.0
   path_provider: ^2.1.5
   path: ^1.9.0
-  media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.7
   microsoft_viewer: ^0.0.6
+  pdfrx: ^1.0.103
+  flutter_3d_controller: ^2.3.0
+  video_player: ^2.10.0
+  just_audio: ^0.9.46
 
 dev_dependencies:
   flutter_test:
