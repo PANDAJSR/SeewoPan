@@ -10,6 +10,7 @@ class DriveMaterial {
     this.createdAt,
     this.updatedAt,
     this.isFolder = false,
+    this.isVirtual = false,
   });
 
   final String id;
@@ -22,6 +23,7 @@ class DriveMaterial {
   final String? createdAt;
   final String? updatedAt;
   final bool isFolder;
+  final bool isVirtual;
 
   factory DriveMaterial.fromApi(Map<String, dynamic> item) {
     final id = _pick(item, ['id', 'materialId', 'fileId', 'resId'])?.toString();

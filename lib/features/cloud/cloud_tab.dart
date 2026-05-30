@@ -27,6 +27,10 @@ part 'cloud_tab_dialogs_and_format.dart';
 part 'cloud_tab_selection.dart';
 part 'cloud_tab_sorting.dart';
 
+const String _cloudCoursewareVirtualFolderId = '__cloud_courseware__';
+const String _driveMaterialsTagName = 'resource,folder';
+const String _cloudCoursewareTagName = 'en';
+
 class CloudTab extends StatefulWidget {
   const CloudTab({
     super.key,
@@ -283,7 +287,7 @@ class _CloudTabState extends State<CloudTab> {
                         tooltip: _isSearchBarVisible ? '收起搜索' : '搜索',
                       ),
                       IconButton(
-                        onPressed: _isLoading || _materials.isEmpty
+                        onPressed: _isLoading || !_hasSelectableMaterials
                             ? null
                             : (_isSelectionMode
                                 ? _exitSelectionMode
@@ -375,13 +379,13 @@ class _CloudTabState extends State<CloudTab> {
                       clipBehavior: Clip.antiAlias,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onSecondaryTapDown: _isSelectionMode
+                        onSecondaryTapDown: _isSelectionMode || item.isVirtual
                             ? null
                             : (details) => _showItemContextMenu(
                                   details.globalPosition,
                                   item,
                                 ),
-                        onLongPressStart: _isSelectionMode
+                        onLongPressStart: _isSelectionMode || item.isVirtual
                             ? null
                             : (details) => _showItemContextMenu(
                                   details.globalPosition,
@@ -394,13 +398,16 @@ class _CloudTabState extends State<CloudTab> {
                           title: Text(item.name),
                           subtitle: Text(_buildSubtitle(item)),
                           trailing: _isSelectionMode
-                              ? Checkbox(
-                                  value: _selectedMaterialIds.contains(item.id),
-                                  onChanged: _isLoading
-                                      ? null
-                                      : (_) =>
-                                          _toggleMaterialSelection(item.id),
-                                )
+                              ? (item.isVirtual
+                                  ? const Icon(Icons.chevron_right_rounded)
+                                  : Checkbox(
+                                      value: _selectedMaterialIds
+                                          .contains(item.id),
+                                      onChanged: _isLoading
+                                          ? null
+                                          : (_) =>
+                                              _toggleMaterialSelection(item),
+                                    ))
                               : (item.isFolder
                                   ? const Icon(Icons.chevron_right_rounded)
                                   : null),

@@ -5,8 +5,12 @@ part of 'cloud_tab.dart';
 extension _CloudTabSelectionExtension on _CloudTabState {
   int get _selectedCount => _selectedMaterialIds.length;
 
+  bool get _hasSelectableMaterials => _materials.any((item) => !item.isVirtual);
+
   void _enterSelectionMode({DriveMaterial? initialItem}) {
-    if (_isLoading || _materials.isEmpty) {
+    if (_isLoading ||
+        !_hasSelectableMaterials ||
+        initialItem?.isVirtual == true) {
       return;
     }
 
@@ -32,11 +36,12 @@ extension _CloudTabSelectionExtension on _CloudTabState {
     });
   }
 
-  void _toggleMaterialSelection(String materialId) {
-    if (!_isSelectionMode) {
+  void _toggleMaterialSelection(DriveMaterial item) {
+    if (!_isSelectionMode || item.isVirtual) {
       return;
     }
 
+    final materialId = item.id;
     setState(() {
       if (_selectedMaterialIds.contains(materialId)) {
         _selectedMaterialIds = Set<String>.from(_selectedMaterialIds)

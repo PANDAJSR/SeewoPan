@@ -4,10 +4,12 @@ class _FolderEntry {
   const _FolderEntry({
     required this.folderId,
     required this.name,
+    this.tagName = _driveMaterialsTagName,
   });
 
   final String folderId;
   final String name;
+  final String tagName;
 }
 
 class _MoveTargetFolderResult {

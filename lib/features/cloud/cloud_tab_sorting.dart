@@ -49,6 +49,11 @@ extension _CloudTabSortingExtension on _CloudTabState {
   }
 
   int _compareMaterial(DriveMaterial left, DriveMaterial right) {
+    final virtualFirst = _compareVirtual(left, right);
+    if (virtualFirst != 0) {
+      return virtualFirst;
+    }
+
     final folderFirst = _compareFolder(left, right);
     if (folderFirst != 0) {
       return folderFirst;
@@ -74,6 +79,13 @@ extension _CloudTabSortingExtension on _CloudTabState {
       return result;
     }
     return _compareName(left, right);
+  }
+
+  int _compareVirtual(DriveMaterial left, DriveMaterial right) {
+    if (left.isVirtual == right.isVirtual) {
+      return 0;
+    }
+    return left.isVirtual ? -1 : 1;
   }
 
   int _compareFolder(DriveMaterial left, DriveMaterial right) {

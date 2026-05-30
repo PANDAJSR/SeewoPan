@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,96 @@ import 'package:seewopan/features/transfer/upload_task_manager.dart';
 import 'package:seewopan/shared/pinco_api_client.dart';
 
 void main() {
+  testWidgets(
+    'shows cloud courseware virtual folder and loads it with en tag',
+    (WidgetTester tester) async {
+      final materialRequests = <Map<String, dynamic>>[];
+
+      final mockClient = MockClient((request) async {
+        final action = request.url.queryParameters['actionName'];
+        if (action == 'GetV1DriveMaterials') {
+          final payload = jsonDecode(request.body) as Map<String, dynamic>;
+          materialRequests.add(payload);
+          final tagName = payload['tagName']?.toString() ?? '';
+
+          final list = tagName == 'en'
+              ? [
+                  {
+                    'id': 'en-1',
+                    'folderId': '0',
+                    'name': '云课件示例.enbx',
+                    'type': 'resource',
+                    'size': 1024,
+                  },
+                ]
+              : [
+                  {
+                    'id': 'm1',
+                    'folderId': '0',
+                    'name': '语文课件.pdf',
+                    'type': 'resource',
+                    'size': 1234,
+                  },
+                ];
+
+          return http.Response(
+            jsonEncode({
+              'statusCode': 0,
+              'data': {'list': list},
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        return http.Response('not-found', 404);
+      });
+
+      final apiClient = PincoApiClient(httpClient: mockClient);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CloudTab(
+              cookie: 'token=abc',
+              isLoadingCookie: false,
+              apiClient: apiClient,
+              onUploadFiles: (List<UploadSourceFile> files) async {},
+              onDownloadMaterials: (materials) async => materials.length,
+              onOpenTransferTab: () {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('云课件'), findsOneWidget);
+      expect(find.text('语文课件.pdf'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('云课件')).dy <
+            tester.getTopLeft(find.text('语文课件.pdf')).dy,
+        isTrue,
+      );
+
+      await tester.tap(find.text('云课件'), buttons: kSecondaryMouseButton);
+      await tester.pumpAndSettle();
+      expect(find.text('重命名'), findsNothing);
+      expect(find.text('分享...'), findsNothing);
+      expect(find.text('删除文件夹'), findsNothing);
+
+      await tester.tap(find.text('云课件'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('云课件示例.enbx'), findsOneWidget);
+      expect(find.text('根目录 / 云课件'), findsOneWidget);
+      expect(materialRequests, hasLength(2));
+      expect(materialRequests.first['tagName'], 'resource,folder');
+      expect(materialRequests.last['tagName'], 'en');
+      expect(materialRequests.last['folderId'], '0');
+    },
+  );
+
   testWidgets('supports selecting multiple items and deleting them in batch', (
     WidgetTester tester,
   ) async {

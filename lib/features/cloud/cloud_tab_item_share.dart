@@ -44,6 +44,10 @@ class _ShareConfig {
 
 extension _CloudTabItemShareExtension on _CloudTabState {
   Future<void> _shareItem(DriveMaterial item) async {
+    if (item.isVirtual) {
+      return;
+    }
+
     final config = await _showShareConfigDialog(item);
     if (config == null || !mounted) {
       return;

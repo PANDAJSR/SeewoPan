@@ -22,6 +22,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
         cookie: widget.cookie.trim(),
         folderId: folderId,
         keyword: _searchKeyword,
+        tagName: _currentTagName,
         forceRefresh: forceRefresh,
       );
 
@@ -29,10 +30,11 @@ extension _CloudTabLoadingExtension on _CloudTabState {
         return;
       }
 
+      final visibleItems = _withVirtualFolders(items);
       setState(() {
         _isLoading = false;
-        _materials = _sortMaterials(items);
-        _syncSelectionAfterReload(items);
+        _materials = _sortMaterials(visibleItems);
+        _syncSelectionAfterReload(visibleItems);
       });
     } catch (error) {
       if (!mounted) {
@@ -48,6 +50,37 @@ extension _CloudTabLoadingExtension on _CloudTabState {
 
   String get _currentFolderId =>
       _folderPath.isEmpty ? '0' : _folderPath.last.folderId;
+
+  String get _currentTagName =>
+      _folderPath.isEmpty ? _driveMaterialsTagName : _folderPath.last.tagName;
+
+  bool get _isAtRoot => _folderPath.isEmpty;
+
+  List<DriveMaterial> _withVirtualFolders(List<DriveMaterial> items) {
+    if (!_isAtRoot || _searchKeyword.isNotEmpty) {
+      return items;
+    }
+
+    final hasCoursewareFolder = items.any(
+      (item) => item.id == _cloudCoursewareVirtualFolderId,
+    );
+    if (hasCoursewareFolder) {
+      return items;
+    }
+
+    return <DriveMaterial>[
+      const DriveMaterial(
+        id: _cloudCoursewareVirtualFolderId,
+        folderId: '0',
+        name: '云课件',
+        size: 0,
+        mimeType: 'folder',
+        isFolder: true,
+        isVirtual: true,
+      ),
+      ...items,
+    ];
+  }
 
   Future<void> _goBack() async {
     if (_folderPath.isEmpty || _isLoading) {
@@ -67,8 +100,25 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       return;
     }
 
+    if (item.isVirtual) {
+      setState(() {
+        _folderPath = [
+          ..._folderPath,
+          const _FolderEntry(
+            folderId: '0',
+            name: '云课件',
+            tagName: _cloudCoursewareTagName,
+          ),
+        ];
+        _isSelectionMode = false;
+        _selectedMaterialIds = <String>{};
+      });
+      await _loadMaterials();
+      return;
+    }
+
     if (_isSelectionMode) {
-      _toggleMaterialSelection(item.id);
+      _toggleMaterialSelection(item);
       return;
     }
 
@@ -76,7 +126,11 @@ extension _CloudTabLoadingExtension on _CloudTabState {
       setState(() {
         _folderPath = [
           ..._folderPath,
-          _FolderEntry(folderId: item.folderId, name: item.name),
+          _FolderEntry(
+            folderId: item.folderId,
+            name: item.name,
+            tagName: _currentTagName,
+          ),
         ];
         _isSelectionMode = false;
         _selectedMaterialIds = <String>{};

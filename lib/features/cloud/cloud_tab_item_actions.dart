@@ -13,6 +13,10 @@ enum _ItemMenuAction {
 
 extension _CloudTabItemActionsExtension on _CloudTabState {
   Future<void> _showItemContextMenu(Offset position, DriveMaterial item) async {
+    if (item.isVirtual) {
+      return;
+    }
+
     final selected = await showMenu<_ItemMenuAction>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -178,6 +182,10 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
   }
 
   Future<void> _renameItem(DriveMaterial item) async {
+    if (item.isVirtual) {
+      return;
+    }
+
     final renamed = await _showRenameDialog(item.name);
     if (renamed == null || !mounted) {
       return;
@@ -257,6 +265,10 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
   }
 
   Future<void> _deleteItem(DriveMaterial item) async {
+    if (item.isVirtual) {
+      return;
+    }
+
     final confirmed = await _showDeleteConfirmDialog(item);
     if (confirmed != true || !mounted) {
       return;
@@ -297,6 +309,7 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
 
     final selectedIds = _materials
         .where((item) => _selectedMaterialIds.contains(item.id))
+        .where((item) => !item.isVirtual)
         .map((item) => item.id)
         .toList(growable: false);
     if (selectedIds.isEmpty) {
@@ -344,6 +357,7 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
 
     final selectedItems = _materials
         .where((item) => _selectedMaterialIds.contains(item.id))
+        .where((item) => !item.isVirtual)
         .toList(growable: false);
     if (selectedItems.isEmpty) {
       _exitSelectionMode();
@@ -360,6 +374,7 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
 
     final selectedItems = _materials
         .where((item) => _selectedMaterialIds.contains(item.id))
+        .where((item) => !item.isVirtual)
         .toList(growable: false);
     if (selectedItems.isEmpty) {
       _exitSelectionMode();
@@ -425,11 +440,13 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
   }
 
   Future<void> _moveItems(List<DriveMaterial> items) async {
-    if (items.isEmpty || _isLoading) {
+    final movableItems =
+        items.where((item) => !item.isVirtual).toList(growable: false);
+    if (movableItems.isEmpty || _isLoading) {
       return;
     }
 
-    final blockedFolderIds = items
+    final blockedFolderIds = movableItems
         .where((item) => item.isFolder)
         .map((item) => item.folderId.trim())
         .where((id) => id.isNotEmpty)
@@ -450,7 +467,7 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
       return;
     }
 
-    final materialIds = items
+    final materialIds = movableItems
         .map((item) => item.id)
         .where((id) => id.trim().isNotEmpty)
         .toList();
