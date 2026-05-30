@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../shared/models/drive_materials_capacity.dart';
 import '../../shared/models/user_profile.dart';
 import '../../shared/pinco_api_client.dart';
+import 'sign_in_page.dart';
 
 part 'profile_tab_capacity.dart';
 
@@ -187,22 +188,46 @@ class _ProfileTabState extends State<ProfileTab> {
               segments: _buildUsageSegments(),
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: hasCookie && !_isLoadingUserInfo && !_isLoadingCapacity
-                  ? () => _fetchOverview(forceRefresh: true)
-                  : null,
-              icon: (_isLoadingUserInfo || _isLoadingCapacity)
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_search_outlined),
-              label: Text(
-                (_isLoadingUserInfo || _isLoadingCapacity)
-                    ? '获取中...'
-                    : '刷新资料与空间',
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed:
+                        hasCookie && !_isLoadingUserInfo && !_isLoadingCapacity
+                            ? () => _fetchOverview(forceRefresh: true)
+                            : null,
+                    icon: (_isLoadingUserInfo || _isLoadingCapacity)
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.person_search_outlined),
+                    label: Text(
+                      (_isLoadingUserInfo || _isLoadingCapacity)
+                          ? '获取中...'
+                          : '刷新资料',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: hasCookie
+                        ? () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => SignInPage(
+                                    cookie: _cookieController.text.trim()),
+                              ),
+                            );
+                          }
+                        : null,
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    label: const Text('每日签到'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             const Divider(height: 28),
