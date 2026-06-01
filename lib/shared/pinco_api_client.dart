@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -12,8 +13,11 @@ import 'models/drive_materials_capacity.dart';
 import 'models/user_profile.dart';
 
 part 'pinco_api_client_materials.dart';
+part 'pinco_api_client_download_stream.dart';
 part 'pinco_api_client_preview.dart';
 part 'pinco_api_client_upload.dart';
+part 'pinco_api_client_upload_file_path.dart';
+part 'pinco_api_client_upload_stream.dart';
 part 'pinco_api_client_parsing.dart';
 
 typedef UploadProgressCallback = void Function(UploadProgress progress);

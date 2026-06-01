@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../webdav/webdav_settings.dart';
+import 'webdav_settings_card.dart';
+
 class SettingsTab extends StatelessWidget {
   const SettingsTab({
     super.key,
@@ -12,6 +15,14 @@ class SettingsTab extends StatelessWidget {
     required this.downloadDirectory,
     required this.onSelectDownloadDirectory,
     required this.onResetDownloadDirectory,
+    required this.webDavSettings,
+    required this.isWebDavRunning,
+    required this.isWebDavBusy,
+    required this.webDavUri,
+    required this.webDavErrorMessage,
+    required this.onStartWebDav,
+    required this.onStopWebDav,
+    required this.onWebDavSettingsChanged,
   });
 
   final ThemeMode themeMode;
@@ -23,6 +34,14 @@ class SettingsTab extends StatelessWidget {
   final String downloadDirectory;
   final Future<void> Function() onSelectDownloadDirectory;
   final Future<void> Function() onResetDownloadDirectory;
+  final WebDavSettings webDavSettings;
+  final bool isWebDavRunning;
+  final bool isWebDavBusy;
+  final Uri? webDavUri;
+  final String? webDavErrorMessage;
+  final Future<void> Function() onStartWebDav;
+  final Future<void> Function() onStopWebDav;
+  final ValueChanged<WebDavSettings> onWebDavSettingsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +114,17 @@ class SettingsTab extends StatelessWidget {
             value: maxConcurrentDownloads,
             onChanged: onMaxConcurrentDownloadsChanged,
             description: '范围 1-10，默认 3。修改后会立即应用到后续排队任务。',
+          ),
+          const SizedBox(height: 12),
+          WebDavSettingsCard(
+            settings: webDavSettings,
+            isRunning: isWebDavRunning,
+            isBusy: isWebDavBusy,
+            uri: webDavUri,
+            errorMessage: webDavErrorMessage,
+            onStart: onStartWebDav,
+            onStop: onStopWebDav,
+            onSettingsChanged: onWebDavSettingsChanged,
           ),
           const SizedBox(height: 12),
           Card(
