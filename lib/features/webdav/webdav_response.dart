@@ -61,6 +61,17 @@ void writeWebDavError(
     ..write(message);
 }
 
+void copyWebDavHeader(
+  Map<String, String> source,
+  HttpResponse response,
+  String header,
+) {
+  final value = source[header];
+  if (value != null && value.isNotEmpty) {
+    response.headers.set(header, value);
+  }
+}
+
 void _writeResponse(
   StringBuffer buffer, {
   required String href,

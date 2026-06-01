@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:mime/mime.dart';
@@ -10,6 +11,8 @@ import 'webdav_drive_gateway.dart';
 import 'webdav_path.dart';
 import 'webdav_response.dart';
 import 'webdav_settings.dart';
+
+part 'webdav_direct_link_api.dart';
 
 class SeewoWebDavServer {
   SeewoWebDavServer({required PincoApiClient apiClient})
@@ -79,6 +82,10 @@ class SeewoWebDavServer {
             HttpHeaders.wwwAuthenticateHeader,
             'Basic realm="SeewoPan WebDAV"',
           );
+        return;
+      }
+      if (isDirectLinkApiRequest(request)) {
+        await _handleDirectLinkApi(request);
         return;
       }
       if (_cookie.trim().isEmpty) {
@@ -196,22 +203,22 @@ class SeewoWebDavServer {
       range: request.headers.value(HttpHeaders.rangeHeader),
     );
     request.response.statusCode = upstream.statusCode;
-    _copyHeader(
+    copyWebDavHeader(
       upstream.headers,
       request.response,
       HttpHeaders.contentTypeHeader,
     );
-    _copyHeader(
+    copyWebDavHeader(
       upstream.headers,
       request.response,
       HttpHeaders.contentLengthHeader,
     );
-    _copyHeader(
+    copyWebDavHeader(
       upstream.headers,
       request.response,
       HttpHeaders.contentRangeHeader,
     );
-    _copyHeader(
+    copyWebDavHeader(
       upstream.headers,
       request.response,
       HttpHeaders.acceptRangesHeader,
@@ -385,16 +392,5 @@ class SeewoWebDavServer {
       return null;
     }
     return resolved.material;
-  }
-
-  void _copyHeader(
-    Map<String, String> source,
-    HttpResponse response,
-    String header,
-  ) {
-    final value = source[header];
-    if (value != null && value.isNotEmpty) {
-      response.headers.set(header, value);
-    }
   }
 }

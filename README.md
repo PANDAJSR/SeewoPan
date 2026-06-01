@@ -35,3 +35,7 @@ flutter run
 ## 说明
 
 本项目为第三方客户端，和希沃官方无隶属关系。
+
+## 文档
+
+- [WebDAV HTTP API](docs/webdav-api.md)
