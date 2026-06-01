@@ -4,7 +4,7 @@ SeewoPan 的本地 WebDAV 服务除标准 WebDAV 方法外，还提供一个 JSO
 
 ## 基础信息
 
-- Base URL：`http://127.0.0.1:{port}`
+- Base URL：`http://0.0.0.0:{port}`（服务默认监听 `0.0.0.0`，局域网设备请使用运行 SeewoPan 设备的局域网 IP 访问）
 - 默认端口：`8088`
 - 认证：沿用设置页中的 WebDAV 用户名和密码，使用 HTTP Basic Auth。
 - Content-Type：响应为 `application/json`。
@@ -75,14 +75,14 @@ GET /__seewopan/api/download-link?id=material-id
 
 ```bash
 curl -u 'seewopan:your-password' \
-  'http://127.0.0.1:8088/__seewopan/api/download-link?path=%2F%E8%AF%BE%E7%A8%8B%2F%E8%AF%95%E5%8D%B7.pdf'
+  'http://192.168.1.10:8088/__seewopan/api/download-link?path=%2F%E8%AF%BE%E7%A8%8B%2F%E8%AF%95%E5%8D%B7.pdf'
 ```
 
 下载文件：
 
 ```bash
 url="$(curl -s -u 'seewopan:your-password' \
-  'http://127.0.0.1:8088/__seewopan/api/download-link?path=%2F%E8%AF%BE%E7%A8%8B%2F%E8%AF%95%E5%8D%B7.pdf' \
+  'http://192.168.1.10:8088/__seewopan/api/download-link?path=%2F%E8%AF%BE%E7%A8%8B%2F%E8%AF%95%E5%8D%B7.pdf' \
   | jq -r '.url')"
 curl -L "$url" -o "试卷.pdf"
 ```

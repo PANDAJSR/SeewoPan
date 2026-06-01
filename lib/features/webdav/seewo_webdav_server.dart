@@ -35,7 +35,7 @@ class SeewoWebDavServer {
     }
     return Uri(
       scheme: 'http',
-      host: '127.0.0.1',
+      host: server.address.address,
       port: server.port,
       path: '/',
     );
@@ -50,8 +50,7 @@ class SeewoWebDavServer {
     }
     _settings = settings;
     _cookie = cookie;
-    _server =
-        await HttpServer.bind(InternetAddress.loopbackIPv4, settings.port);
+    _server = await HttpServer.bind(InternetAddress.anyIPv4, settings.port);
     unawaited(_serve(_server!));
   }
 
