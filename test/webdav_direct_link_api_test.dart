@@ -59,6 +59,7 @@ void main() {
     try {
       final response = await http.get(
         server.uri!.replace(
+          host: '127.0.0.1',
           path: '/__seewopan/api/download-link',
           queryParameters: {'path': '/课程/试卷.pdf'},
         ),

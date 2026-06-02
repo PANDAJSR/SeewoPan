@@ -67,35 +67,29 @@ class SettingsTab extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                  RadioListTile<ThemeMode>(
-                    title: const Text('跟随系统（默认）'),
-                    value: ThemeMode.system,
+                  RadioGroup<ThemeMode>(
                     groupValue: themeMode,
                     onChanged: (value) {
                       if (value != null) {
                         onThemeModeChanged(value);
                       }
                     },
-                  ),
-                  RadioListTile<ThemeMode>(
-                    title: const Text('浅色模式'),
-                    value: ThemeMode.light,
-                    groupValue: themeMode,
-                    onChanged: (value) {
-                      if (value != null) {
-                        onThemeModeChanged(value);
-                      }
-                    },
-                  ),
-                  RadioListTile<ThemeMode>(
-                    title: const Text('深色模式'),
-                    value: ThemeMode.dark,
-                    groupValue: themeMode,
-                    onChanged: (value) {
-                      if (value != null) {
-                        onThemeModeChanged(value);
-                      }
-                    },
+                    child: const Column(
+                      children: [
+                        RadioListTile<ThemeMode>(
+                          title: Text('跟随系统（默认）'),
+                          value: ThemeMode.system,
+                        ),
+                        RadioListTile<ThemeMode>(
+                          title: Text('浅色模式'),
+                          value: ThemeMode.light,
+                        ),
+                        RadioListTile<ThemeMode>(
+                          title: Text('深色模式'),
+                          value: ThemeMode.dark,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
