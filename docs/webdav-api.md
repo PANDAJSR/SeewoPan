@@ -1,6 +1,6 @@
 # WebDAV HTTP API
 
-SeewoPan 的本地 WebDAV 服务除标准 WebDAV 方法外，还提供一个 JSON API，用于获取希沃云盘文件的直连下载链接。该链接由希沃云盘接口返回，客户端可直接请求该 URL 下载文件，不经过 SeewoPan 本地代理转发。
+SeewoPan 的本地 WebDAV 服务除标准 WebDAV 方法外，还提供一个 JSON API，用于获取希沃云盘文件的官方下载链接。该链接形如 `https://pinco.seewo.com/server-main/api/v1/drive/materials/download?resId=...`，客户端可直接请求该 URL 下载文件，不经过 SeewoPan 本地代理转发。
 
 ## 基础信息
 
@@ -9,7 +9,7 @@ SeewoPan 的本地 WebDAV 服务除标准 WebDAV 方法外，还提供一个 JSO
 - 认证：沿用设置页中的 WebDAV 用户名和密码，使用 HTTP Basic Auth。
 - Content-Type：响应为 `application/json`。
 
-## 获取文件直连下载链接
+## 获取文件下载链接
 
 ```http
 GET /__seewopan/api/download-link?path=/课程/试卷.pdf
@@ -36,8 +36,8 @@ GET /__seewopan/api/download-link?id=material-id
   "name": "试卷.pdf",
   "size": 1048576,
   "mimeType": "application/pdf",
-  "url": "https://cstore-pri-pinco-bs.seewo.com/...",
-  "source": "downloadUrl"
+  "url": "https://pinco.seewo.com/server-main/api/v1/drive/materials/download?resId=file-material-id",
+  "source": "pincoDownloadUrl"
 }
 ```
 
@@ -49,8 +49,8 @@ GET /__seewopan/api/download-link?id=material-id
 | `name` | 文件名；使用 `id` 查询时可能为 `null`。 |
 | `size` | 文件大小；使用 `id` 查询时可能为 `null`。 |
 | `mimeType` | MIME 类型；使用 `id` 查询时可能为 `null`。 |
-| `url` | 希沃云盘返回的直连下载 URL。 |
-| `source` | URL 来源，优先为 `downloadUrl`，缺失时回退为 `previewUrl`。 |
+| `url` | 希沃官方下载接口 URL，不经过 SeewoPan 本地代理。 |
+| `source` | 固定为 `pincoDownloadUrl`。 |
 
 ### 错误响应
 

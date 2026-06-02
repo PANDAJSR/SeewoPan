@@ -8,7 +8,8 @@ import 'package:seewopan/features/webdav/webdav_settings.dart';
 import 'package:seewopan/shared/pinco_api_client.dart';
 
 void main() {
-  test('download link api returns direct url for a WebDAV path', () async {
+  test('download link api returns stable Pinco download url for a WebDAV path',
+      () async {
     final apiClient = PincoApiClient(
       httpClient: MockClient((request) async {
         final action = request.url.queryParameters['actionName'];
@@ -46,17 +47,6 @@ void main() {
           });
         }
 
-        if (action == 'GetV1DriveMaterialsByMaterialId') {
-          final payload = jsonDecode(request.body) as Map<String, dynamic>;
-          expect(payload['materialId'], 'file-1');
-          return _jsonResponse({
-            'statusCode': 0,
-            'data': {
-              'downloadUrl': 'https://oss.example.com/file-1.pdf',
-            },
-          });
-        }
-
         return http.Response('not-found', 404);
       }),
     );
@@ -78,8 +68,12 @@ void main() {
       expect(response.statusCode, 200);
       expect(body['materialId'], 'file-1');
       expect(body['name'], '试卷.pdf');
-      expect(body['url'], 'https://oss.example.com/file-1.pdf');
-      expect(body['source'], 'downloadUrl');
+      expect(
+        body['url'],
+        'https://pinco.seewo.com/server-main/api/v1/drive/materials/download'
+        '?resId=file-1',
+      );
+      expect(body['source'], 'pincoDownloadUrl');
     } finally {
       await server.stop();
     }

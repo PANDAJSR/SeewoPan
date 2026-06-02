@@ -65,11 +65,7 @@ extension _SeewoWebDavDirectLinkApi on SeewoWebDavServer {
       resolvedMaterialId = material.id;
     }
 
-    final preview = await _apiClient.getMaterialPreview(
-      cookie: _cookie,
-      materialId: resolvedMaterialId,
-    );
-    final directUrl = preview.downloadUrl ?? preview.previewUrl;
+    final directUrl = _apiClient.buildMaterialDownloadUrl(resolvedMaterialId);
 
     request.response
       ..statusCode = HttpStatus.ok
@@ -82,8 +78,7 @@ extension _SeewoWebDavDirectLinkApi on SeewoWebDavServer {
             'size': material?.size,
             'mimeType': material?.mimeType,
             'url': directUrl,
-            'source':
-                preview.downloadUrl == null ? 'previewUrl' : 'downloadUrl',
+            'source': 'pincoDownloadUrl',
           },
         ),
       );
