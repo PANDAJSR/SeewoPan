@@ -104,37 +104,49 @@ extension _CloudTabItemShareExtension on _CloudTabState {
                     ),
                     const SizedBox(height: 12),
                     const Text('有效期'),
-                    RadioGroup<_ShareExpireOption>(
-                      groupValue: expireOption,
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
-                        setDialogState(() => expireOption = value);
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          RadioListTile<_ShareExpireOption>(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: const Text('15天'),
-                            value: _ShareExpireOption.days15,
-                          ),
-                          RadioListTile<_ShareExpireOption>(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: const Text('30天'),
-                            value: _ShareExpireOption.days30,
-                          ),
-                          RadioListTile<_ShareExpireOption>(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: const Text('不限时'),
-                            value: _ShareExpireOption.unlimited,
-                          ),
-                        ],
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        RadioListTile<_ShareExpireOption>(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text('15天'),
+                          value: _ShareExpireOption.days15,
+                          groupValue: expireOption,
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setDialogState(() => expireOption = value);
+                          },
+                        ),
+                        RadioListTile<_ShareExpireOption>(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text('30天'),
+                          value: _ShareExpireOption.days30,
+                          groupValue: expireOption,
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setDialogState(() => expireOption = value);
+                          },
+                        ),
+                        RadioListTile<_ShareExpireOption>(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: const Text('不限时'),
+                          value: _ShareExpireOption.unlimited,
+                          groupValue: expireOption,
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setDialogState(() => expireOption = value);
+                          },
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
