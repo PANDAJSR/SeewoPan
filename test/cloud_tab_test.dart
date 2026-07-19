@@ -101,6 +101,74 @@ void main() {
     },
   );
 
+  testWidgets('loads a real folder by its own id instead of its parent id', (
+    WidgetTester tester,
+  ) async {
+    final requestedFolderIds = <String>[];
+
+    final mockClient = MockClient((request) async {
+      final action = request.url.queryParameters['actionName'];
+      if (action != 'GetV1DriveMaterials') {
+        return http.Response('not-found', 404);
+      }
+
+      final payload = jsonDecode(request.body) as Map<String, dynamic>;
+      final folderId = payload['folderId']?.toString() ?? '0';
+      requestedFolderIds.add(folderId);
+      final list = folderId == 'folder-1'
+          ? [
+              {
+                'id': 'child-file',
+                'folderId': 'folder-1',
+                'name': '二级目录文件.pdf',
+                'type': 'resource',
+                'size': 2048,
+              },
+            ]
+          : [
+              {
+                'id': 'folder-1',
+                'folderId': '0',
+                'name': '课件目录',
+                'type': 'folder',
+              },
+            ];
+
+      return http.Response(
+        jsonEncode({
+          'statusCode': 0,
+          'data': {'list': list},
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CloudTab(
+            cookie: 'token=abc',
+            isLoadingCookie: false,
+            apiClient: PincoApiClient(httpClient: mockClient),
+            onUploadFiles: (List<UploadSourceFile> files) async {},
+            onDownloadMaterials: (materials) async => materials.length,
+            onOpenTransferTab: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('课件目录'));
+    await tester.pumpAndSettle();
+
+    expect(requestedFolderIds, <String>['0', 'folder-1']);
+    expect(find.text('根目录 / 课件目录'), findsOneWidget);
+    expect(find.text('二级目录文件.pdf'), findsOneWidget);
+    expect(find.text('云课件'), findsNothing);
+  });
+
   testWidgets('supports selecting multiple items and deleting them in batch', (
     WidgetTester tester,
   ) async {

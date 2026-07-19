@@ -448,7 +448,7 @@ extension _CloudTabItemActionsExtension on _CloudTabState {
 
     final blockedFolderIds = movableItems
         .where((item) => item.isFolder)
-        .map((item) => item.folderId.trim())
+        .map((item) => item.id.trim())
         .where((id) => id.isNotEmpty)
         .toSet();
     final target = await _showMoveTargetFolderDialog(

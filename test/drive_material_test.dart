@@ -5,13 +5,14 @@ void main() {
   test('detects folder item from API payload', () {
     final item = DriveMaterial.fromApi({
       'id': 'folder-1',
-      'folderId': 'folder-1',
+      'folderId': '0',
       'name': '课件目录',
       'type': 'folder',
     });
 
     expect(item.isFolder, isTrue);
-    expect(item.folderId, 'folder-1');
+    expect(item.id, 'folder-1');
+    expect(item.folderId, '0');
   });
 
   test('detects file item from API payload', () {

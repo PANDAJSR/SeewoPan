@@ -378,7 +378,7 @@ extension _CloudTabDialogsAndFormatExtension on _CloudTabState {
                                     path = [
                                       ...path,
                                       _FolderEntry(
-                                        folderId: folder.folderId,
+                                        folderId: folder.id,
                                         name: folder.name,
                                       ),
                                     ];

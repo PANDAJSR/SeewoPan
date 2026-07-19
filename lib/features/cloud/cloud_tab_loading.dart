@@ -127,7 +127,7 @@ extension _CloudTabLoadingExtension on _CloudTabState {
         _folderPath = [
           ..._folderPath,
           _FolderEntry(
-            folderId: item.folderId,
+            folderId: item.id,
             name: item.name,
             tagName: _currentTagName,
           ),
